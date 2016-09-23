@@ -1,0 +1,22 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio 14
+VisualStudioVersion = 14.0.25420.1
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "WeChatBot.Net", "WeChatBot.Net\WeChatBot.Net.csproj", "{94E05FCB-9470-4500-8A73-C8187C0803FF}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{94E05FCB-9470-4500-8A73-C8187C0803FF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{94E05FCB-9470-4500-8A73-C8187C0803FF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{94E05FCB-9470-4500-8A73-C8187C0803FF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{94E05FCB-9470-4500-8A73-C8187C0803FF}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+EndGlobal

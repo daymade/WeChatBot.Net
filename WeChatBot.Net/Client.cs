@@ -1,31 +1,44 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Dynamic;
-using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
+using Flurl;
+using Flurl.Http;
+using QRCoder;
+using WeChatBot.Net.Enums;
+using WeChatBot.Net.Helper;
+using WeChatBot.Net.Util;
 using WeChatBot.Net.Util.Extensions;
 
 namespace WeChatBot.Net
 {
     public class Client
     {
-        private dynamic DEBUG;
-        private string uuid;
-        private string base_uri;
-        private string redirect_uri;
-        private string uin;
-        private string sid;
-        private string skey;
-        private string pass_ticket;
-        private string device_id;
+        protected string UUID;
+
+        /// <summary>
+        /// 
+        /// </summary>
+        public QRCodeOutputType QRCodeOutputType { get; set; }
+
+        public bool Debug;
+        private dynamic base_uri;
+        private dynamic redirect_uri;
+        private dynamic uin;
+        private dynamic sid;
+        private dynamic skey;
+        private dynamic pass_ticket;
+        private dynamic device_id;
         private dynamic base_request;
-        private string sync_key_str;
+        private dynamic sync_key_str;
         private dynamic sync_key;
-        private string sync_host;
+        private dynamic sync_host;
         private dynamic r;
-        private dynamic temp_pwd;
         private dynamic session;
-        private dynamic conf;
+        private dynamic configuration;
         private dynamic my_account;
         private dynamic member_list;
         private dynamic group_members;
@@ -35,7 +48,7 @@ namespace WeChatBot.Net
         private dynamic group_list;
         private dynamic special_list;
         private dynamic encry_chat_room_id_list;
-        private int file_index;
+        private dynamic file_index;
 
         private readonly string[] _specialUsers =
         {
@@ -75,11 +88,15 @@ namespace WeChatBot.Net
             "notification_messages"
         };
 
+        protected static readonly Random Random = new Random();
+        private readonly Logger _logger;
+        private readonly FileManager _fileManager;
+
         public Client()
         {
             //r = redis.StrictRedis(host = "localhost", port = 6379, db = 0)
-            DEBUG = false;
-            uuid = "";
+            Debug = false;
+            UUID = "";
             base_uri = "";
             redirect_uri = "";
             uin = "";
@@ -92,16 +109,10 @@ namespace WeChatBot.Net
             sync_key = new List<int>();
             sync_host = "";
 
-            //文件缓存目录
-            var temppwd = Path.Combine(Directory.GetCurrentDirectory(), "temp");
-            if (!Directory.Exists(temppwd))
-            {
-                Directory.CreateDirectory(temppwd);
-            }
 
             //session = SafeSession()
             //session.headers.update({ "User-Agent": "Mozilla/5.0 (X11; Linux i686; U;) Gecko/20070322 Kazehakase/0.4.5"})
-            //conf = { "qr": "png"}
+            //configuration = { "qr": "png"}
 
             my_account = new ExpandoObject(); //当前账户
 
@@ -121,6 +132,92 @@ namespace WeChatBot.Net
             special_list = new ExpandoObject(); //特殊账号列表
             encry_chat_room_id_list = new ExpandoObject(); //存储群聊的EncryChatRoomId，获取群内成员头像时需要用到
             file_index = 0;
+            _logger = new Logger();
+            _fileManager = new FileManager();
+        }
+
+        public async Task Run()
+        {
+            var getUuidSuccess = await GetUuid();
+            if (!getUuidSuccess.Item1)
+            {
+                _logger.Error("Failed to get login token. ");
+            }
+
+            UUID = getUuidSuccess.Item2;
+
+            var loginQRCode = GenerateLoginQRCode(this.UUID);
+
+            //TODO read config
+            //var qrCodeOutputType = (QRCodeOutputType) configuration.QRCodeOutputType;
+
+            await ShowQRCode(loginQRCode, QRCodeOutputType.Both);
+
+            _logger.Info("Please use WeChat to scan the QR code .");
+
+            var result = wait4login();
+
+            if (result != "SUCCESS")
+            {
+                _logger.Error("Web WeChat login failed. failed code={result}");
+                return;
+            }
+
+            if (login())
+            {
+                _logger.Info("Web WeChat login succeed .");
+            }
+            else
+            {
+                _logger.Error("Web WeChat login failed .");
+                return;
+            }
+            if (init())
+            {
+                _logger.Info("Web WeChat init succeed .");
+            }
+            else
+            {
+                _logger.Error("Web WeChat init failed .");
+                return;
+            }
+
+            status_notify();
+            get_contact();
+
+            _logger.Info($@"Get {contact_list.Count()} contacts");
+            _logger.Info(@"Start to process messages .");
+            proc_msg();
+        }
+
+        private void get_contact()
+        {
+            throw new NotImplementedException();
+        }
+
+        private void status_notify()
+        {
+            throw new NotImplementedException();
+        }
+
+        private void proc_msg()
+        {
+            throw new NotImplementedException();
+        }
+
+        private bool init()
+        {
+            throw new NotImplementedException();
+        }
+
+        private bool login()
+        {
+            throw new NotImplementedException();
+        }
+
+        private object wait4login()
+        {
+            throw new NotImplementedException();
         }
 
         /// <summary>
@@ -128,8 +225,8 @@ namespace WeChatBot.Net
         /// </summary>
         private void GetContact()
         {
-            var url = base_uri + $@"/webwxgetcontact?pass_ticket={pass_ticket}&skey={skey}&r={GetRTime()}";
-            r = session.post(url, new {data = "{}"});
+            var url = base_uri + $@"/webwxgetcontact?pass_ticket={pass_ticket}&skey={skey}&r={NowUnix()}";
+            r = session.post(url, new { data = "{}" });
             r.encoding = "utf-8";
             var dic = json.loads(r.text);
             member_list = dic["MemberList"];
@@ -146,47 +243,47 @@ namespace WeChatBot.Net
                 {
                     public_list.append(contact);
                     account_info["normal_member"][contact["UserName"]] = new
-                                                                         {
-                                                                             type = "public",
-                                                                             info = contact
-                                                                         };
+                    {
+                        type = "public",
+                        info = contact
+                    };
                 }
                 else if (Enumerable.Contains(_specialUsers, contact["UserName"])) //# 特殊账户
                 {
                     special_list.append(contact);
                     account_info["normal_member"][contact["UserName"]] = new
-                                                                         {
-                                                                             type = "special",
-                                                                             info = contact
-                                                                         };
+                    {
+                        type = "special",
+                        info = contact
+                    };
                 }
                 else if (contact["UserName"].find("@@") != -1) //# 群聊
                 {
                     group_list.append(contact);
                     account_info["normal_member"][contact["UserName"]] = new
-                                                                         {
-                                                                             type = "group",
-                                                                             info = contact
-                                                                         };
+                    {
+                        type = "group",
+                        info = contact
+                    };
                 }
                 else if (contact["UserName"] == my_account["UserName"]) //# 自己
                 {
                     account_info["normal_member"][contact["UserName"]] = new
-                                                                         {
-                                                                             type = "",
-                                                                             @this = "",
-                                                                             info = "",
-                                                                             contact = ""
-                                                                         };
+                    {
+                        type = "",
+                        @this = "",
+                        info = "",
+                        contact = ""
+                    };
                 }
                 else
                 {
                     contact_list.append(contact);
                     account_info["normal_member"][contact["UserName"]] = new
-                                                                         {
-                                                                             type = "contact",
-                                                                             info = contact
-                                                                         };
+                    {
+                        type = "contact",
+                        info = contact
+                    };
                 }
             }
 
@@ -199,7 +296,7 @@ namespace WeChatBot.Net
                 {
                     if (account_info.contains(member["UserName"]))
                     {
-                        account_info["group_member"][member["UserName"]] = new {type = "group_member", info = member, group};
+                        account_info["group_member"][member["UserName"]] = new { type = "group_member", info = member, group };
                     }
                 }
             }
@@ -212,23 +309,23 @@ namespace WeChatBot.Net
         /// <returns></returns>
         void batch_get_group_members()
         {
-            var url = base_uri + $@"/webwxbatchgetcontact?type=ex&r={GetRTime()}&pass_ticket={pass_ticket}";
+            var url = base_uri + $@"/webwxbatchgetcontact?type=ex&r={NowUnix()}&pass_ticket={pass_ticket}";
 
 
             dynamic list = new ExpandoObject();
             foreach (var group in group_list)
             {
-                list.add(new {UserName = group["UserName"], EncryChatRoomId = ""});
+                list.add(new { UserName = group["UserName"], EncryChatRoomId = "" });
             }
 
             var @params = new
-                          {
-                              BaseRequest = base_request,
-                              group_list.Count,
-                              List = list
-                          };
+            {
+                BaseRequest = base_request,
+                group_list.Count,
+                List = list
+            };
 
-            dynamic r = session.post(url, new {data = json.dumps(@params)});
+            dynamic r = session.post(url, new { data = json.dumps(@params) });
             r.encoding = "utf-8";
             var dic = json.loads(r.text);
             dynamic group_members = new ExpandoObject();
@@ -245,12 +342,85 @@ namespace WeChatBot.Net
             encry_chat_room_id_list = encry_chat_room_id;
         }
 
-        private long GetRTime()
+        /// <summary>
+        /// Get an unique token within current session, generated by server
+        /// </summary>
+        /// <returns>isSuccess and the uuid</returns>
+        /// <remarks>
+        /// If failed, uuid will be empty string
+        /// </remarks>
+        public async Task<Tuple<bool,string>> GetUuid()
+        {
+            var url = @"https://login.weixin.qq.com/jslogin";
+            var @params = new
+            {
+                appid = "wx782c26e4c19acffb",
+                fun = "new",
+                lang = "zh_CN",
+                _ = NowUnix() * 1000 + Random.Next(1, 999)
+            };
+
+            var data = await url.SetQueryParams(@params).GetStringAsync();
+
+            var match = Regex.Match(data, @"window.QRLogin.code = (?<code>\d+); window.QRLogin.uuid = ""(?<uuid>\S+?)""");
+            if (!match.Success)
+            {
+                return new Tuple<bool, string>(false, "");
+            }
+
+            var code = match.Groups["code"].Value;
+            var uuid = match.Groups["uuid"].Value;
+
+            return new Tuple<bool, string>(code == "200", uuid);
+        }
+
+        /// <summary>
+        /// Generate QRCodeData for output to console or show as png
+        /// </summary>
+        /// <param name="uuid">an unique token within current session, generated by server</param>
+        /// <returns></returns>
+        private QRCodeData GenerateLoginQRCode(string uuid)
+        {
+            string str = $@"https://login.weixin.qq.com/l/{uuid}";
+
+            var qrGenerator = new QRCodeGenerator();
+            QRCodeData qrCodeData = qrGenerator.CreateQrCode(str, QRCodeGenerator.ECCLevel.Q);
+            
+            return qrCodeData;
+        }
+
+        /// <summary>
+        /// Display Qrcode for user interaction
+        /// </summary>
+        /// <param name="qrCodeData">QrCodeData is Create by QRCodeGenerator.CreateQrCode</param>
+        /// <param name="qrCodeOutputType">Choose output to console or show as png</param>
+        /// <returns></returns>
+        private async Task ShowQRCode(QRCodeData qrCodeData, QRCodeOutputType qrCodeOutputType)
+        {
+            if (qrCodeOutputType.HasFlag(QRCodeOutputType.TTY))
+            {
+                await QRCodeHelper.WriteToConsoleAsync(qrCodeData.ModuleMatrix);
+            }
+
+            if (qrCodeOutputType.HasFlag(QRCodeOutputType.PNG))
+            {
+                var qrCodePath = _fileManager.GetTempFilePath("wxqr.png");
+                var qrCodeImage = new QRCode(qrCodeData).GetGraphic(10);
+                qrCodeImage.Save(qrCodePath);
+
+                await Task.Run(() => Process.Start(qrCodePath));
+            }
+        }
+
+        private long NowUnix()
         {
             return DateTime.Now.ToUnixTime();
         }
     }
 
+    /// <summary>
+    /// temp stub
+    /// </summary>
     public class json
     {
         public static Dictionary<object, object> loads(dynamic json)

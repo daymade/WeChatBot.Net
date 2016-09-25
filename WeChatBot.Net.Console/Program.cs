@@ -1,8 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+﻿using WeChatBot.Net.Enums;
 
 namespace WeChatBot.Net.Console
 {
@@ -10,6 +6,12 @@ namespace WeChatBot.Net.Console
     {
         static void Main(string[] args)
         {
+            var client = new Client
+                         {
+                             Debug = true,
+                             QRCodeOutputType = QRCodeOutputType.TTY
+                         };
+            client.Run().Wait();
         }
     }
 }

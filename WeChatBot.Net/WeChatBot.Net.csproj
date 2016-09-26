@@ -40,6 +40,10 @@
       <HintPath>..\packages\Flurl.Http.1.0.3\lib\net45\Flurl.Http.dll</HintPath>
       <Private>True</Private>
     </Reference>
+    <Reference Include="Flurl.Http.Xml, Version=1.3.1.0, Culture=neutral, processorArchitecture=MSIL">
+      <HintPath>..\packages\Flurl.Http.Xml.1.3.1\lib\net45\Flurl.Http.Xml.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="Newtonsoft.Json, Version=9.0.0.0, Culture=neutral, PublicKeyToken=30ad4fe6b2a6aeed, processorArchitecture=MSIL">
       <HintPath>..\packages\Newtonsoft.Json.9.0.1\lib\net45\Newtonsoft.Json.dll</HintPath>
       <Private>True</Private>
@@ -77,6 +81,8 @@
     <Compile Include="Enums\QRCodeOutputType.cs" />
     <Compile Include="Helper\QRCodeHelper.cs" />
     <Compile Include="Logger.cs" />
+    <Compile Include="Model\BaseRequest.cs" />
+    <Compile Include="Model\error.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Util\ConsoleWriter.cs" />
     <Compile Include="Util\Extensions\DateTimeExtensions.cs" />

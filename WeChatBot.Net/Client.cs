@@ -3,13 +3,23 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.Dynamic;
 using System.Linq;
+using System.Net;
+using System.Net.Http;
 using System.Text.RegularExpressions;
+using System.Threading;
 using System.Threading.Tasks;
+using System.Web;
+using System.Xml.Linq;
 using Flurl;
 using Flurl.Http;
+using Flurl.Http.Configuration;
+using Flurl.Http.Xml;
+using Flurl.Util;
+using Newtonsoft.Json;
 using QRCoder;
 using WeChatBot.Net.Enums;
 using WeChatBot.Net.Helper;
+using WeChatBot.Net.Model;
 using WeChatBot.Net.Util;
 using WeChatBot.Net.Util.Extensions;
 
@@ -18,21 +28,22 @@ namespace WeChatBot.Net
     public class Client
     {
         protected string UUID;
+        public bool Debug;
+        protected string BaseUri;
+        private string _redirectUri;
+
+        private string wxsid;
+        private string skey;
+        private string pass_ticket;
+        private int uin;
 
         /// <summary>
-        /// 
+        /// Choose output to console or show as png
         /// </summary>
         public QRCodeOutputType QRCodeOutputType { get; set; }
 
-        public bool Debug;
-        private dynamic base_uri;
-        private dynamic redirect_uri;
-        private dynamic uin;
-        private dynamic sid;
-        private dynamic skey;
-        private dynamic pass_ticket;
         private dynamic device_id;
-        private dynamic base_request;
+        protected BaseRequest _baseRequest;
         private dynamic sync_key_str;
         private dynamic sync_key;
         private dynamic sync_host;
@@ -92,24 +103,40 @@ namespace WeChatBot.Net
         private static readonly Logger Logger = new Logger();
         private static readonly FileManager FileManager = new FileManager();
         private static readonly QRCodeHelper QRCodeHelper = new QRCodeHelper();
+        private static readonly FlurlClient FlurlClient;
+
+        static Client()
+        {
+            //ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
+            FlurlClient = new FlurlClient();
+
+            FlurlClient.EnableCookies();
+            //FlurlClient.HttpClient.DefaultRequestHeaders.Add("User-Agent", @"Mozilla/5.0 (X11; Linux i686; U;) Gecko/20070322 Kazehakase/0.4.5");
+            //FlurlClient.HttpClient.DefaultRequestHeaders.Add("Connection", "keep-alive");
+            Console.WriteLine(JsonConvert.SerializeObject(FlurlClient.HttpClient.DefaultRequestHeaders));
+            //.ConfigureHttpClient(x =>
+            //                        {
+            //                            x.DefaultRequestHeaders.Add("User-Agent", @"Mozilla/5.0 (X11; Linux i686; U;) Gecko/20070322 Kazehakase/0.4.5");
+            //                            x.DefaultRequestHeaders.Add("Connection", "keep-alive");
+            //                        });
+        }
 
         public Client()
         {
             //r = redis.StrictRedis(host = "localhost", port = 6379, db = 0)
             Debug = false;
             UUID = "";
-            base_uri = "";
-            redirect_uri = "";
-            uin = "";
-            sid = "";
+            BaseUri = "";
+            _redirectUri = "";
+            wxsid = "";
             skey = "";
             pass_ticket = "";
             device_id = "e" + "123456789012345";
-            base_request = new ExpandoObject();
             sync_key_str = "";
             sync_key = new List<int>();
             sync_host = "";
 
+            
 
             //session = SafeSession()
             //session.headers.update({ "User-Agent": "Mozilla/5.0 (X11; Linux i686; U;) Gecko/20070322 Kazehakase/0.4.5"})
@@ -149,15 +176,15 @@ namespace WeChatBot.Net
 
             Logger.Info("Please use WeChat to scan the QR code .");
 
-            var result = wait4login();
+            var result = await WaitingUserProcessing();
 
-            if (result != "SUCCESS")
+            if (result != HttpStatusCode.OK)
             {
                 Logger.Error("Web WeChat login failed. failed code={result}");
                 return;
             }
 
-            if (login())
+            if (await Login())
             {
                 Logger.Info("Web WeChat login succeed .");
             }
@@ -166,7 +193,8 @@ namespace WeChatBot.Net
                 Logger.Error("Web WeChat login failed .");
                 return;
             }
-            if (init())
+
+            if (await Init())
             {
                 Logger.Info("Web WeChat init succeed .");
             }
@@ -199,19 +227,121 @@ namespace WeChatBot.Net
             throw new NotImplementedException();
         }
 
-        private bool init()
+        private async Task<bool> Init()
         {
-            throw new NotImplementedException();
+            var url = BaseUri + "/webwxinit?r={NowUnix()}&lang=en_US&pass_ticket={pass_ticket}";
+            var dic =  await url.WithClient(FlurlClient)
+                                .PostJsonAsync(new { BaseRequest = _baseRequest })
+                                .ReceiveJson<dynamic>();
+            this.sync_key = dic.SyncKey;
+            this.my_account = dic.User;
+            sync_key_str = string.Join("|", ((List<dynamic>) sync_key.List).Select(x => x.Key + x.Val));
+            return dic.BaseResponse.Ret == 0;
         }
 
-        private bool login()
+
+        /// <summary>
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        private async Task<bool> Login()
         {
-            throw new NotImplementedException();
+            if (len(this._redirectUri) < 4)
+            {
+                Logger.Error(@"Login failed due to network problem, please try again.");
+                return false;
+            }
+
+            var ret = await _redirectUri.GetXmlAsync<error>();
+
+            if (new[] { ret.skey, ret.wxsid, ret.pass_ticket }.Any(string.IsNullOrEmpty) ||
+                ret.wxuin <= 0)
+            {
+                return false;
+            }
+
+            this._baseRequest = new BaseRequest
+            {
+                DeviceID = device_id,
+                Sid = ret.wxsid,
+                Skey = ret.skey,
+                Uin = ret.wxuin
+            };
+            return true;
         }
 
-        private object wait4login()
+
+        private int len(string redirectUri)
         {
-            throw new NotImplementedException();
+            return redirectUri.Length;
+        }
+
+        /// <summary>
+        /// Wait for user interaction to scan the qrcode and confirm login on phone
+        /// </summary>
+        /// <returns></returns>
+        /// <remarks>
+        ///  http comet:
+        ///  	tip=1, 等待用户扫描二维码,
+        ///  		201: scaned
+        ///  		408: timeout
+        ///  	tip=0, 等待用户确认登录,
+        ///  		200: confirmed
+        /// </remarks>
+        private async Task<HttpStatusCode> WaitingUserProcessing()
+        {
+            var tip = 1;
+
+            var tryLaterSecs = 1;
+            var maxRetryTimes = 10;
+
+            var retryTime = maxRetryTimes;
+            while (retryTime > 0)
+            {
+                var url = $@"https://login.weixin.qq.com/cgi-bin/mmwebwx-bin/login?tip={tip}&uuid={UUID}&_={NowUnix()}";
+
+                //todo FIXME: NOT WORKING
+                var response = await url.WithClient(FlurlClient)
+                                        .WithHeader("Connection", "keep-alive")
+                                        .WithHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.116 Safari/537.36")
+                                        .WithHeader("Accept", "*/*")
+                                        .WithHeader("Accept-Encoding", "gzip, deflate, sdch, br")
+                                        .WithHeader("Accept-Language", "zh-CN,zh;q=0.8,en-US;q=0.6,en;q=0.4,zh-TW;q=0.2,ja;q=0.2,pt;q=0.2")
+                                        .GetAsync();
+                if (response.StatusCode == HttpStatusCode.Created)
+                {
+                    Logger.Info("Please confirm to login .");
+                    tip = 0;
+                }
+                else if (response.StatusCode == HttpStatusCode.OK)  //# 确认登录成功
+                {
+                    var p = Regex.Match(@"window.redirect_uri=""(\S+?)"";", await response.Content.ReadAsStringAsync());
+
+                    var redirectUri = p.Groups[1] + "&fun=new";
+                    this._redirectUri = redirectUri;
+                    this.BaseUri = redirectUri.Substring(0, redirectUri.LastIndexOf("/", StringComparison.Ordinal));
+
+                    return response.StatusCode;
+                }
+                else if (response.StatusCode == HttpStatusCode.RequestTimeout)
+                {
+                    Logger.Error($@"WeChat login timeout. retry in {tryLaterSecs} secs later...");
+
+                    tip = 1;  //# 重置
+                    retryTime -= 1;
+                    Thread.Sleep(tryLaterSecs);
+                }
+                else
+                {
+                    Logger.Error($@"WeChat login exception return_code={response.StatusCode}. retry in {tryLaterSecs} secs later...");
+
+                    tip = 1;
+                    retryTime -= 1;
+                    Thread.Sleep(tryLaterSecs);
+                }
+            }
+
+            return HttpStatusCode.NotFound;
         }
 
         /// <summary>
@@ -219,7 +349,7 @@ namespace WeChatBot.Net
         /// </summary>
         private void GetContact()
         {
-            var url = base_uri + $@"/webwxgetcontact?pass_ticket={pass_ticket}&skey={skey}&r={NowUnix()}";
+            var url = BaseUri + $@"/webwxgetcontact?pass_ticket={pass_ticket}&skey={skey}&r={NowUnix()}";
             r = session.post(url, new { data = "{}" });
             r.encoding = "utf-8";
             var dic = json.loads(r.text);
@@ -303,7 +433,7 @@ namespace WeChatBot.Net
         /// <returns></returns>
         void batch_get_group_members()
         {
-            var url = base_uri + $@"/webwxbatchgetcontact?type=ex&r={NowUnix()}&pass_ticket={pass_ticket}";
+            var url = BaseUri + $@"/webwxbatchgetcontact?type=ex&r={NowUnix()}&pass_ticket={pass_ticket}";
 
 
             dynamic list = new ExpandoObject();
@@ -314,7 +444,7 @@ namespace WeChatBot.Net
 
             var @params = new
             {
-                BaseRequest = base_request,
+                BaseRequest = _baseRequest,
                 group_list.Count,
                 List = list
             };
@@ -343,7 +473,7 @@ namespace WeChatBot.Net
         /// <remarks>
         /// If failed, uuid will be empty string
         /// </remarks>
-        public async Task<Tuple<bool,string>> GetUuid()
+        public async Task<Tuple<bool, string>> GetUuid()
         {
             var url = @"https://login.weixin.qq.com/jslogin";
             var @params = new
@@ -354,7 +484,12 @@ namespace WeChatBot.Net
                 _ = NowUnix() * 1000 + Random.Next(1, 999)
             };
 
-            var data = await url.SetQueryParams(@params).GetStringAsync();
+            var data = await url.SetQueryParams(@params)
+                                .WithClient(FlurlClient)
+                                .WithHeader("Connection", "keep-alive")
+                                .WithHeader("Cache-Control", "no-cache, must-revalidate")
+                                .GetAsync()
+                                .ReceiveString();
 
             var match = Regex.Match(data, @"window.QRLogin.code = (?<code>\d+); window.QRLogin.uuid = ""(?<uuid>\S+?)""");
             if (!match.Success)

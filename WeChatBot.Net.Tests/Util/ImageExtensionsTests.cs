@@ -13,7 +13,7 @@ namespace WeChatBot.Net.Util.Tests
         {
             var qrCodeData = new QRCodeGenerator().CreateQrCode("123",QRCodeGenerator.ECCLevel.Q);
 
-            await QRCodeHelper.WriteToConsoleAsync(qrCodeData.ModuleMatrix);
+            await new ConsoleWriter().WriteToConsoleAsync(qrCodeData.ModuleMatrix);
             Assert.Pass();
         }
     }

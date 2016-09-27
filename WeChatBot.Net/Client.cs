@@ -18,10 +18,10 @@ using Flurl.Util;
 using Newtonsoft.Json;
 using QRCoder;
 using WeChatBot.Net.Enums;
+using WeChatBot.Net.Extensions;
 using WeChatBot.Net.Helper;
 using WeChatBot.Net.Model;
 using WeChatBot.Net.Util;
-using WeChatBot.Net.Util.Extensions;
 
 namespace WeChatBot.Net
 {
@@ -103,23 +103,7 @@ namespace WeChatBot.Net
         private static readonly Logger Logger = new Logger();
         private static readonly FileManager FileManager = new FileManager();
         private static readonly QRCodeHelper QRCodeHelper = new QRCodeHelper();
-        private static readonly FlurlClient FlurlClient;
-
-        static Client()
-        {
-            //ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls12 | SecurityProtocolType.Tls11 | SecurityProtocolType.Tls;
-            FlurlClient = new FlurlClient();
-
-            FlurlClient.EnableCookies();
-            //FlurlClient.HttpClient.DefaultRequestHeaders.Add("User-Agent", @"Mozilla/5.0 (X11; Linux i686; U;) Gecko/20070322 Kazehakase/0.4.5");
-            //FlurlClient.HttpClient.DefaultRequestHeaders.Add("Connection", "keep-alive");
-            Console.WriteLine(JsonConvert.SerializeObject(FlurlClient.HttpClient.DefaultRequestHeaders));
-            //.ConfigureHttpClient(x =>
-            //                        {
-            //                            x.DefaultRequestHeaders.Add("User-Agent", @"Mozilla/5.0 (X11; Linux i686; U;) Gecko/20070322 Kazehakase/0.4.5");
-            //                            x.DefaultRequestHeaders.Add("Connection", "keep-alive");
-            //                        });
-        }
+        private static readonly HttpClientContainer HttpClientContainer = new HttpClientContainer();
 
         public Client()
         {
@@ -230,7 +214,7 @@ namespace WeChatBot.Net
         private async Task<bool> Init()
         {
             var url = BaseUri + "/webwxinit?r={NowUnix()}&lang=en_US&pass_ticket={pass_ticket}";
-            var dic =  await url.WithClient(FlurlClient)
+            var dic =  await url.WithClient(HttpClientContainer.GetClient())
                                 .PostJsonAsync(new { BaseRequest = _baseRequest })
                                 .ReceiveJson<dynamic>();
             this.sync_key = dic.SyncKey;
@@ -300,8 +284,7 @@ namespace WeChatBot.Net
             {
                 var url = $@"https://login.weixin.qq.com/cgi-bin/mmwebwx-bin/login?tip={tip}&uuid={UUID}&_={NowUnix()}";
 
-                //todo FIXME: NOT WORKING
-                var response = await url.WithClient(FlurlClient)
+                var response = await url.WithClient(HttpClientContainer.GetClient())
                                         .WithHeader("Connection", "keep-alive")
                                         .WithHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.116 Safari/537.36")
                                         .WithHeader("Accept", "*/*")
@@ -485,11 +468,9 @@ namespace WeChatBot.Net
             };
 
             var data = await url.SetQueryParams(@params)
-                                .WithClient(FlurlClient)
-                                .WithHeader("Connection", "keep-alive")
+                                .WithClient(HttpClientContainer.GetClient())
                                 .WithHeader("Cache-Control", "no-cache, must-revalidate")
-                                .GetAsync()
-                                .ReceiveString();
+                                .GetStringAsync().ConfigureAwait(false);
 
             var match = Regex.Match(data, @"window.QRLogin.code = (?<code>\d+); window.QRLogin.uuid = ""(?<uuid>\S+?)""");
             if (!match.Success)

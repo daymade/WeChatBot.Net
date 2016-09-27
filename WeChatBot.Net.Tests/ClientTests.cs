@@ -1,16 +1,12 @@
-﻿using NUnit.Framework;
-using WeChatBot.Net;
-using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using System;
 using System.Net;
 using System.Net.Http;
-using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using Flurl.Http;
-using Newtonsoft.Json;
+using NUnit.Framework;
 using WeChatBot.Net.Enums;
+using WeChatBot.Net.Extensions;
 
 namespace WeChatBot.Net.Tests
 {
@@ -29,10 +25,10 @@ namespace WeChatBot.Net.Tests
         public async Task RunTest_Normal_ShouldOuputQRCode()
         {
             var client = new Client
-            {
-                Debug = true,
-                QRCodeOutputType = QRCodeOutputType.TTY
-            };
+                         {
+                             Debug = true,
+                             QRCodeOutputType = QRCodeOutputType.TTY
+                         };
             await client.Run();
 
             Assert.Pass();
@@ -54,7 +50,24 @@ namespace WeChatBot.Net.Tests
             Assert.That(q.IsSuccessStatusCode);
         }
 
-
+        /// <summary>
+        ///     AutoDispose = false fix this problem
+        /// </summary>
+        /// <returns></returns>
+        [Test]
+        public async Task LoginTest_HttpsWithFlurlClientTwice_ShouldReturn400()
+        {
+            var url = @"https://login.weixin.qq.com/cgi-bin/mmwebwx-bin/login?tip=1&uuid=YenIkE0Lsw==&_=1474877000";
+            {
+                var q = await url.WithClient(new FlurlClient() {AutoDispose = false}).GetAsyncSafe();
+                Assert.That(q.IsSuccessStatusCode);
+                await q.Content.ReadAsStringAsync();
+            }
+            {
+                var q = await url.WithClient(new FlurlClient() {AutoDispose = false}).GetAsyncSafe();
+                Assert.That(q.IsSuccessStatusCode);
+            }
+        }
 
         [Category("TestHttpClient")]
         [Test]
@@ -65,7 +78,7 @@ namespace WeChatBot.Net.Tests
                 cts.CancelAfter(TimeSpan.FromSeconds(5));
 
                 var url = @"https://login.weixin.qq.com/cgi-bin/mmwebwx-bin/login?tip=1&uuid=YenIkE0Lsw==&_=1474877000";
-                
+
                 using (var client = new HttpClient())
                 {
                     var q = await client.GetAsync(url, cts.Token);
@@ -78,69 +91,52 @@ namespace WeChatBot.Net.Tests
         [Test]
         public async Task LoginTest_HttpsWithHttpClientTwice_ShouldReturn400()
         {
+            ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls12;
             using (var cts = new CancellationTokenSource())
             {
                 cts.CancelAfter(TimeSpan.FromSeconds(5));
 
-                var url = @"https://login.weixin.qq.com/cgi-bin/mmwebwx-bin/login?tip=1&uuid=YenIkE0Lsw==&_=1474877000";
+                var url = @"https://login.weixin.qq.com/cgi-bin/mmwebwx-bin/login?tip=1&uuid=YenIkE0Lsw==&_=1474877000"; //a new httpclient will fail
 
-                //url = @"https://www.baidu.com";
+                //url = @"https://www.baidu.com"; //uncomment to use this url, r1 r2 r3 both success
 
-                ServicePointManager.Expect100Continue = false;
-                ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls;
+                var h = new HttpClientHandler()
+                        {
+                            AllowAutoRedirect = true,
+                            Proxy = new WebProxy("http://127.0.0.1:8888"),
+                            UseProxy = true
+                        };
 
-                Console.WriteLine(ServicePointManager.Expect100Continue);
-                Console.WriteLine(ServicePointManager.SecurityProtocol);
-                Console.WriteLine(ServicePointManager.ServerCertificateValidationCallback);
-                
-                using (var client = new HttpClient())
+                using (var client = new HttpClient(h))
                 {
                     client.DefaultRequestHeaders.Add("Cache-Control", "no-cache");
                     client.DefaultRequestHeaders.Add("Connection", "keep-alive");
-                    //client.DefaultRequestHeaders.Add("Connection", "close");
+                    client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (X11; Linux i686; U;) Gecko/20070322 Kazehakase/0.4.5");
 
-                    for (int i = 0; i < 2; i++)
-                    {
-                        var q = await client.GetAsync(url, cts.Token);
-                        Assert.That(q.IsSuccessStatusCode);
-                    }
+                    var q = await client.GetAsync(url, cts.Token); //first request r1 //success
+                    var q2 = await client.GetAsync(url, cts.Token); //second request r2 //sucess
+
+                    Assert.That(q.IsSuccessStatusCode);
+                    Assert.That(q2.IsSuccessStatusCode);
                 }
 
-                //Console.WriteLine("fuck httpclient");
+                Console.WriteLine("fuck httpclient");
 
-                //using (var client = new HttpClient())
-                //{
-                //    client.DefaultRequestHeaders.Add("Cache-Control", "no-cache");
-                //    client.DefaultRequestHeaders.Add("Connection", "close");
-                //    var q = await client.GetAsync(url, cts.Token);
-                //    Assert.That(q.IsSuccessStatusCode);
-                //}
-            }
-        }
+                var h2 = new HttpClientHandler()
+                         {
+                             AllowAutoRedirect = true,
+                             Proxy = new WebProxy("http://127.0.0.1:8888"),
+                             UseProxy = true
+                         };
+                using (var client = new HttpClient(h2))
+                {
+                    client.DefaultRequestHeaders.Add("Cache-Control", "no-cache");
+                    client.DefaultRequestHeaders.Add("Connection", "keep-alive");
+                    client.DefaultRequestHeaders.Add("User-Agent", "Mozilla/5.0 (X11; Linux i686; U;) Gecko/20070322 Kazehakase/0.4.5");
 
-        [Category("TestHttpClient")]
-        [Test]
-        public async Task LoginTest_HttpsWithWebClientTwice_ShouldReturn400()
-        {
-            using (var cts = new CancellationTokenSource())
-            {
-                cts.CancelAfter(TimeSpan.FromSeconds(5));
-
-                var url = @"https://login.weixin.qq.com/cgi-bin/mmwebwx-bin/login?tip=1&uuid=YenIkE0Lsw==&_=1474877000";
-
-                // Initialize an HttpWebRequest for the current URL.
-                var webReq = (HttpWebRequest)WebRequest.Create(url);
-
-                // Send the request to the Internet resource and wait for
-                // the response.                
-                var response = await webReq.GetResponseAsync();
-
-                // Initialize an HttpWebRequest for the current URL.
-                var webReq1 = (HttpWebRequest)WebRequest.Create(url);
-
-                // Send the request to the Internet resource and wait for
-                // the response.                
-                var response2 = await webReq1.GetResponseAsync();
+                    var q = await client.GetAsync(url, cts.Token); //third request r3 //failed
+                    Assert.That(q.IsSuccessStatusCode);
+                }
             }
         }
     }

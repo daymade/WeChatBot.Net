@@ -80,6 +80,8 @@
     <Compile Include="Client.cs" />
     <Compile Include="Enums\QRCodeOutputType.cs" />
     <Compile Include="Extensions\DateTimeExtensions.cs" />
+    <Compile Include="Extensions\FlurlClientExtensions.cs" />
+    <Compile Include="Helper\HttpClientContainer.cs" />
     <Compile Include="Helper\QRCodeHelper.cs" />
     <Compile Include="Logger.cs" />
     <Compile Include="Model\BaseRequest.cs" />

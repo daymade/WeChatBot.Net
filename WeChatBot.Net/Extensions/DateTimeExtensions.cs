@@ -1,6 +1,6 @@
 ﻿using System;
 
-namespace WeChatBot.Net.Util.Extensions
+namespace WeChatBot.Net.Extensions
 {
     public static class DateTimeExtensions
     {

@@ -79,13 +79,13 @@
   <ItemGroup>
     <Compile Include="Client.cs" />
     <Compile Include="Enums\QRCodeOutputType.cs" />
+    <Compile Include="Extensions\DateTimeExtensions.cs" />
     <Compile Include="Helper\QRCodeHelper.cs" />
     <Compile Include="Logger.cs" />
     <Compile Include="Model\BaseRequest.cs" />
     <Compile Include="Model\error.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Util\ConsoleWriter.cs" />
-    <Compile Include="Util\Extensions\DateTimeExtensions.cs" />
     <Compile Include="Util\FileManager.cs" />
   </ItemGroup>
   <ItemGroup>

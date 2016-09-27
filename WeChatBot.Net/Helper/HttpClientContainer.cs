@@ -6,7 +6,7 @@ namespace WeChatBot.Net.Helper
 {
     public class HttpClientContainer
     {
-        internal static readonly FlurlClient FlurlClient;
+        protected static readonly FlurlClient FlurlClient;
 
         static HttpClientContainer()
         {

@@ -21,36 +21,52 @@ using WeChatBot.Net.Enums;
 using WeChatBot.Net.Extensions;
 using WeChatBot.Net.Helper;
 using WeChatBot.Net.Model;
+using WeChatBot.Net.Model.API;
+using WeChatBot.Net.Model.API.Base;
 using WeChatBot.Net.Util;
 
 namespace WeChatBot.Net
 {
     public class Client
     {
-        protected string UUID;
-        public bool Debug;
-        protected string BaseUri;
+        private string _baseUri;
         private string _redirectUri;
 
-        private string wxsid;
-        private string skey;
-        private string pass_ticket;
-        private int uin;
+        private string _wxsid;
+        private string _skey;
+        private string _passTicket;
+        private int _wxuin;
 
-        /// <summary>
-        /// Choose output to console or show as png
-        /// </summary>
-        public QRCodeOutputType QRCodeOutputType { get; set; }
+        protected string UUID;
+        protected User MyAccount;
+        protected Synckey SyncKey;
+        protected string SyncKeyAsString;
+
+        protected BaseRequest BaseRequest
+        {
+            get
+            {
+                return new BaseRequest()
+                {
+                    Skey = _skey,
+                    DeviceID = device_id,
+                    Sid = _wxsid,
+                    Uin = _wxuin
+                };
+            }
+        }
+
+        public Settings Settings
+        {
+            get { return _settings; }
+        }
+
 
         private dynamic device_id;
-        protected BaseRequest _baseRequest;
-        private dynamic sync_key_str;
-        private dynamic sync_key;
         private dynamic sync_host;
         private dynamic r;
         private dynamic session;
         private dynamic configuration;
-        private dynamic my_account;
         private dynamic member_list;
         private dynamic group_members;
         private dynamic account_info;
@@ -61,72 +77,28 @@ namespace WeChatBot.Net
         private dynamic encry_chat_room_id_list;
         private dynamic file_index;
 
-        private readonly string[] _specialUsers =
-        {
-            "newsapp",
-            "fmessage",
-            "filehelper",
-            "weibo",
-            "qqmail",
-            "fmessage",
-            "tmessage",
-            "qmessage",
-            "qqsync",
-            "floatbottle",
-            "lbsapp",
-            "shakeapp",
-            "medianote",
-            "qqfriend",
-            "readerapp",
-            "blogapp",
-            "facebookapp",
-            "masssendapp",
-            "meishiapp",
-            "feedsapp",
-            "voip",
-            "blogappweixin",
-            "weixin",
-            "brandsessionholder",
-            "weixinreminder",
-            "wxid_novlwrv3lqwv11",
-            "gh_22b87fa7cb3c",
-            "officialaccounts",
-            "notification_messages",
-            "wxid_novlwrv3lqwv11",
-            "gh_22b87fa7cb3c",
-            "wxitil",
-            "userexperience_alarm",
-            "notification_messages"
-        };
-
         private static readonly Random Random = new Random();
         private static readonly Logger Logger = new Logger();
         private static readonly FileManager FileManager = new FileManager();
         private static readonly QRCodeHelper QRCodeHelper = new QRCodeHelper();
         private static readonly HttpClientContainer HttpClientContainer = new HttpClientContainer();
+        private readonly GlobalConstant _globalConstant = new GlobalConstant();
+        private readonly Settings _settings;
 
-        public Client()
+        public Client() : this(new Settings())
         {
+            
+        }
+
+        public Client(Settings settings)
+        {
+            _settings = settings;
+
             //r = redis.StrictRedis(host = "localhost", port = 6379, db = 0)
-            Debug = false;
-            UUID = "";
-            BaseUri = "";
-            _redirectUri = "";
-            wxsid = "";
-            skey = "";
-            pass_ticket = "";
             device_id = "e" + "123456789012345";
-            sync_key_str = "";
-            sync_key = new List<int>();
             sync_host = "";
 
-            
-
-            //session = SafeSession()
-            //session.headers.update({ "User-Agent": "Mozilla/5.0 (X11; Linux i686; U;) Gecko/20070322 Kazehakase/0.4.5"})
             //configuration = { "qr": "png"}
-
-            my_account = new ExpandoObject(); //当前账户
 
             //所有相关账号: 联系人, 公众号, 群组, 特殊账号
             member_list = new ExpandoObject();
@@ -156,108 +128,26 @@ namespace WeChatBot.Net
 
             UUID = getUuidSuccess.Item2;
 
-            await QRCodeHelper.ShowQRCode(this.UUID);
+            await QRCodeHelper.ShowQRCode(UUID, _settings.QRCodeOutputType);
 
             Logger.Info("Please use WeChat to scan the QR code .");
 
-            var result = await WaitingUserProcessing();
-
-            if (result != HttpStatusCode.OK)
+            var actions = new List<Func<Task<bool>>>()
+                          {
+                              WaitingUserProcessing,
+                              Login,
+                              Init,
+                              StatusNotify,
+                              GetContact
+                          };
+            foreach (var action in actions)
             {
-                Logger.Error("Web WeChat login failed. failed code={result}");
-                return;
+                await ThrowIfFailed(Log(action));
             }
-
-            if (await Login())
-            {
-                Logger.Info("Web WeChat login succeed .");
-            }
-            else
-            {
-                Logger.Error("Web WeChat login failed .");
-                return;
-            }
-
-            if (await Init())
-            {
-                Logger.Info("Web WeChat init succeed .");
-            }
-            else
-            {
-                Logger.Error("Web WeChat init failed .");
-                return;
-            }
-
-            status_notify();
-            get_contact();
 
             Logger.Info($@"Get {contact_list.Count()} contacts");
-            Logger.Info(@"Start to process messages .");
-            proc_msg();
-        }
 
-        private void get_contact()
-        {
-            throw new NotImplementedException();
-        }
-
-        private void status_notify()
-        {
-            throw new NotImplementedException();
-        }
-
-        private void proc_msg()
-        {
-            throw new NotImplementedException();
-        }
-
-        private async Task<bool> Init()
-        {
-            var url = BaseUri + "/webwxinit?r={NowUnix()}&lang=en_US&pass_ticket={pass_ticket}";
-            var dic =  await url.WithClient(HttpClientContainer.GetClient())
-                                .PostJsonAsync(new { BaseRequest = _baseRequest })
-                                .ReceiveJson<dynamic>();
-            this.sync_key = dic.SyncKey;
-            this.my_account = dic.User;
-            sync_key_str = string.Join("|", ((List<dynamic>) sync_key.List).Select(x => x.Key + x.Val));
-            return dic.BaseResponse.Ret == 0;
-        }
-
-
-        /// <summary>
-        /// 
-        /// </summary>
-        /// <returns></returns>
-        private async Task<bool> Login()
-        {
-            if (len(this._redirectUri) < 4)
-            {
-                Logger.Error(@"Login failed due to network problem, please try again.");
-                return false;
-            }
-
-            var ret = await _redirectUri.GetXmlAsync<error>();
-
-            if (new[] { ret.skey, ret.wxsid, ret.pass_ticket }.Any(string.IsNullOrEmpty) ||
-                ret.wxuin <= 0)
-            {
-                return false;
-            }
-
-            this._baseRequest = new BaseRequest
-            {
-                DeviceID = device_id,
-                Sid = ret.wxsid,
-                Skey = ret.skey,
-                Uin = ret.wxuin
-            };
-            return true;
-        }
-
-
-        private int len(string redirectUri)
-        {
-            return redirectUri.Length;
+            await ProcessMessage();
         }
 
         /// <summary>
@@ -272,7 +162,7 @@ namespace WeChatBot.Net
         ///  	tip=0, 等待用户确认登录,
         ///  		200: confirmed
         /// </remarks>
-        private async Task<HttpStatusCode> WaitingUserProcessing()
+        private async Task<bool> WaitingUserProcessing()
         {
             var tip = 1;
 
@@ -285,30 +175,35 @@ namespace WeChatBot.Net
                 var url = $@"https://login.weixin.qq.com/cgi-bin/mmwebwx-bin/login?tip={tip}&uuid={UUID}&_={NowUnix()}";
 
                 var response = await url.WithClient(HttpClientContainer.GetClient())
-                                        .WithHeader("Connection", "keep-alive")
-                                        .WithHeader("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/53.0.2785.116 Safari/537.36")
-                                        .WithHeader("Accept", "*/*")
-                                        .WithHeader("Accept-Encoding", "gzip, deflate, sdch, br")
-                                        .WithHeader("Accept-Language", "zh-CN,zh;q=0.8,en-US;q=0.6,en;q=0.4,zh-TW;q=0.2,ja;q=0.2,pt;q=0.2")
-                                        .GetAsync();
-                if (response.StatusCode == HttpStatusCode.Created)
+                                        .GetAsync()
+                                        .ReceiveString();
+
+                var code = Regex.Match(response, @"window.code=(\d+);").Groups[1].Value;
+
+                if (code == HttpStatusCode.Created.ToString("d"))
                 {
                     Logger.Info("Please confirm to login .");
                     tip = 0;
                 }
-                else if (response.StatusCode == HttpStatusCode.OK)  //# 确认登录成功
+                else if (code == HttpStatusCode.OK.ToString("d"))  //# 确认登录成功
                 {
-                    var p = Regex.Match(@"window.redirect_uri=""(\S+?)"";", await response.Content.ReadAsStringAsync());
+                    var redirectUri = Regex.Match(response, @"window.redirect_uri=""(\S+?)"";", RegexOptions.Multiline | RegexOptions.IgnoreCase).Groups[1].Value;
+                    if (string.IsNullOrEmpty(redirectUri))
+                    {
+                        Logger.Error("redirect_uri not found");
+                        return false;
+                    }
 
-                    var redirectUri = p.Groups[1] + "&fun=new";
-                    this._redirectUri = redirectUri;
-                    this.BaseUri = redirectUri.Substring(0, redirectUri.LastIndexOf("/", StringComparison.Ordinal));
+                    var redirectUrl = redirectUri + "&fun=new";
 
-                    return response.StatusCode;
+                    _redirectUri = redirectUrl;
+                    _baseUri = redirectUri.Substring(0, redirectUri.LastIndexOf("/", StringComparison.Ordinal));
+
+                    return true;
                 }
-                else if (response.StatusCode == HttpStatusCode.RequestTimeout)
+                else if (code == HttpStatusCode.RequestTimeout.ToString("d"))
                 {
-                    Logger.Error($@"WeChat login timeout. retry in {tryLaterSecs} secs later...");
+                    Logger.Info($@"WeChat login timeout. retry in {tryLaterSecs} secs later...");
 
                     tip = 1;  //# 重置
                     retryTime -= 1;
@@ -316,7 +211,7 @@ namespace WeChatBot.Net
                 }
                 else
                 {
-                    Logger.Error($@"WeChat login exception return_code={response.StatusCode}. retry in {tryLaterSecs} secs later...");
+                    Logger.Info($@"WeChat login exception return_code={code}. retry in {tryLaterSecs} secs later...");
 
                     tip = 1;
                     retryTime -= 1;
@@ -324,15 +219,75 @@ namespace WeChatBot.Net
                 }
             }
 
-            return HttpStatusCode.NotFound;
+            Logger.Error($"Web WeChat login failed. ");
+            return false;
+        }
+
+        private async Task<bool> Login()
+        {
+            if (len(_redirectUri) < 4)
+            {
+                Logger.Error(@"Login failed due to network problem, please try again.");
+                return false;
+            }
+
+            var response = await _redirectUri.GetXmlAsync<LoginResponse>();
+
+            if (new[] { response.skey, response.wxsid, response.pass_ticket }.Any(string.IsNullOrEmpty) ||
+                response.wxuin <= 0)
+            {
+                return false;
+            }
+
+            _skey = response.skey;
+            _wxsid = response.wxsid;
+            _passTicket = response.pass_ticket;
+            _wxuin = response.wxuin;
+
+            return true;
+        }
+
+        private async Task<bool> Init()
+        {
+            var url = _baseUri + $"/webwxinit?r={NowUnix()}&lang=en_US&pass_ticket={_passTicket}";
+
+            var initResponse = await url.WithClient(HttpClientContainer.GetClient())
+                               .PostJsonAsync(new { BaseRequest })
+                               .ReceiveJson<InitResponse>();
+
+            MyAccount = initResponse.User;
+            SyncKey = initResponse.SyncKey;
+            SyncKeyAsString = string.Join("|", SyncKey.List.Select(x => x.Key + x.Val));
+
+            return initResponse.BaseResponse.Ret == 0;
+        }
+
+        private async Task<bool> StatusNotify()
+        {
+            var url = _baseUri + $@"/webwxstatusnotify?lang=zh_CN&pass_ticket={_passTicket}";
+
+            var data = new
+                       {
+                           BaseRequest,
+                           Code = 3,
+                           FromUserName = MyAccount.UserName,
+                           ToUserName = MyAccount.UserName,
+                           ClientMsgId = NowUnix()
+                       };
+            var statusNotifyResponse = await url.WithClient(HttpClientContainer.GetClient())
+                                                .PostJsonAsync(data)
+                                                .ReceiveJson<StatusNotifyResponse>();
+            
+            return statusNotifyResponse.BaseResponse.Ret == 0;
         }
 
         /// <summary>
-        ///     获取当前账户的所有相关账号(包括联系人、公众号、群聊、特殊账号)
+        ///    All related accounts for current account (including contacts, public accounts, group chattings, special accounts) 
         /// </summary>
-        private void GetContact()
+        private async Task<bool> GetContact()
         {
-            var url = BaseUri + $@"/webwxgetcontact?pass_ticket={pass_ticket}&skey={skey}&r={NowUnix()}";
+            return true;
+            var url = _baseUri + $@"/webwxgetcontact?pass_ticket={_passTicket}&skey={_skey}&r={NowUnix()}";
             r = session.post(url, new { data = "{}" });
             r.encoding = "utf-8";
             var dic = json.loads(r.text);
@@ -355,7 +310,7 @@ namespace WeChatBot.Net
                         info = contact
                     };
                 }
-                else if (Enumerable.Contains(_specialUsers, contact["UserName"])) //# 特殊账户
+                else if (Enumerable.Contains(_globalConstant.SpecialUsers, contact["UserName"])) //# 特殊账户
                 {
                     special_list.append(contact);
                     account_info["normal_member"][contact["UserName"]] = new
@@ -373,7 +328,7 @@ namespace WeChatBot.Net
                         info = contact
                     };
                 }
-                else if (contact["UserName"] == my_account["UserName"]) //# 自己
+                else if (contact["UserName"] == MyAccount.UserName) //# 自己
                 {
                     account_info["normal_member"][contact["UserName"]] = new
                     {
@@ -394,8 +349,7 @@ namespace WeChatBot.Net
                 }
             }
 
-            batch_get_group_members();
-
+            await batch_get_group_members();
 
             foreach (var group in group_members)
             {
@@ -407,16 +361,34 @@ namespace WeChatBot.Net
                     }
                 }
             }
+
+            return true;
         }
+
+        private async Task ProcessMessage()
+        {
+            Logger.Info(@"Start to process messages .");
+            throw new NotImplementedException();
+        }
+
+
+        private int len(string redirectUri)
+        {
+            return redirectUri.Length;
+        }
+
+        
+
+       
 
         /// <summary>
         ///     批量获取所有群聊成员信息
         /// </summary>
         /// <param name=""></param>
         /// <returns></returns>
-        void batch_get_group_members()
+        async Task batch_get_group_members()
         {
-            var url = BaseUri + $@"/webwxbatchgetcontact?type=ex&r={NowUnix()}&pass_ticket={pass_ticket}";
+            var url = _baseUri + $@"/webwxbatchgetcontact?type=ex&r={NowUnix()}&pass_ticket={_passTicket}";
 
 
             dynamic list = new ExpandoObject();
@@ -427,7 +399,7 @@ namespace WeChatBot.Net
 
             var @params = new
             {
-                BaseRequest = _baseRequest,
+                BaseRequest = BaseRequest,
                 group_list.Count,
                 List = list
             };
@@ -488,6 +460,25 @@ namespace WeChatBot.Net
         private long NowUnix()
         {
             return DateTime.Now.ToUnixTime();
+        }
+
+        private async Task<bool> Log(Func<Task<bool>> action)
+        {
+            var result = await action();
+
+            var resultDescripitn = result ? "succeed" : "failed";
+            Logger.Info($@"Web WeChat {action.Method.Name} {resultDescripitn} .");
+
+            return result;
+        }
+
+        private async Task<bool> ThrowIfFailed(Task<bool> action)
+        {
+            if (!await action)
+            {
+                throw new Exception(action.GetType().Name);
+            }
+            return true;
         }
     }
 

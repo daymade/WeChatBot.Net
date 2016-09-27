@@ -10,15 +10,14 @@ namespace WeChatBot.Net.Helper
     {
         private readonly FileManager _fileManager = new FileManager();
         private readonly ConsoleWriter _consoleWriter = new ConsoleWriter();
+        private readonly Logger _logger = new Logger();
 
-        public async Task ShowQRCode(string uuid)
+        public async Task ShowQRCode(string uuid, QRCodeOutputType qrCodeOutputType)
         {
             var loginQRCode = GenerateLoginQRCode(uuid);
 
-            //TODO read config
-            //var qrCodeOutputType = (QRCodeOutputType) configuration.QRCodeOutputType;
+            await ShowQRCode(loginQRCode, qrCodeOutputType);
 
-            await ShowQRCode(loginQRCode, QRCodeOutputType.Both);
         }
 
         /// <summary>

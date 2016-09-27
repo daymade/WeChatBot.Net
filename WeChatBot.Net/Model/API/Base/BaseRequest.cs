@@ -1,7 +1,4 @@
-using System;
-using System.Collections.Generic;
-
-namespace WeChatBot.Net.Model
+namespace WeChatBot.Net.Model.API.Base
 {
     public class BaseRequest
     {

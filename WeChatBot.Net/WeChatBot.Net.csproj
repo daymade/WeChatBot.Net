@@ -81,12 +81,20 @@
     <Compile Include="Enums\QRCodeOutputType.cs" />
     <Compile Include="Extensions\DateTimeExtensions.cs" />
     <Compile Include="Extensions\FlurlClientExtensions.cs" />
+    <Compile Include="GlobalConstant.cs" />
     <Compile Include="Helper\HttpClientContainer.cs" />
     <Compile Include="Helper\QRCodeHelper.cs" />
     <Compile Include="Logger.cs" />
-    <Compile Include="Model\BaseRequest.cs" />
-    <Compile Include="Model\error.cs" />
+    <Compile Include="Model\API\Base\BaseRequest.cs" />
+    <Compile Include="Model\API\Base\Baseresponse.cs" />
+    <Compile Include="Model\API\InitResponse.cs" />
+    <Compile Include="Model\API\LoginResponse.cs" />
+    <Compile Include="Model\API\StatusNotifyResponse.cs" />
+    <Compile Include="Model\List.cs" />
+    <Compile Include="Model\Synckey.cs" />
+    <Compile Include="Model\User.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
+    <Compile Include="Settings.cs" />
     <Compile Include="Util\ConsoleWriter.cs" />
     <Compile Include="Util\FileManager.cs" />
   </ItemGroup>

@@ -1,13 +1,13 @@
 using System;
 
-namespace WeChatBot.Net.Model
+namespace WeChatBot.Net.Model.API
 {
     /// <remarks/>
     [Serializable()]
     [System.ComponentModel.DesignerCategoryAttribute("code")]
     [System.Xml.Serialization.XmlTypeAttribute(AnonymousType = true)]
-    [System.Xml.Serialization.XmlRootAttribute(Namespace = "", IsNullable = false)]
-    public partial class error
+    [System.Xml.Serialization.XmlRootAttribute(Namespace = "", IsNullable = false, ElementName = "error")]
+    public partial class LoginResponse
     {
 
         private byte retField;

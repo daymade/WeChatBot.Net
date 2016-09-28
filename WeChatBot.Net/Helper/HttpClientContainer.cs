@@ -31,7 +31,7 @@ namespace WeChatBot.Net.Helper
                                                                 });
         }
 
-        public FlurlClient GetClient()
+        public static FlurlClient GetClient()
         {
             return FlurlClient.Clone();
         }

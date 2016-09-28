@@ -32,6 +32,10 @@
     <WarningLevel>4</WarningLevel>
   </PropertyGroup>
   <ItemGroup>
+    <Reference Include="AutoMapper, Version=5.1.1.0, Culture=neutral, PublicKeyToken=be96cd2c38ef1005, processorArchitecture=MSIL">
+      <HintPath>..\packages\AutoMapper.5.1.1\lib\net45\AutoMapper.dll</HintPath>
+      <Private>True</Private>
+    </Reference>
     <Reference Include="Flurl, Version=2.2.1.0, Culture=neutral, processorArchitecture=MSIL">
       <HintPath>..\packages\Flurl.2.2.1\lib\portable40-net40+sl5+win8+wp8+wpa81\Flurl.dll</HintPath>
       <Private>True</Private>
@@ -85,12 +89,15 @@
     <Compile Include="Helper\HttpClientContainer.cs" />
     <Compile Include="Helper\QRCodeHelper.cs" />
     <Compile Include="Logger.cs" />
+    <Compile Include="Model\AccountInfo.cs" />
     <Compile Include="Model\API\Base\BaseRequest.cs" />
     <Compile Include="Model\API\Base\Baseresponse.cs" />
+    <Compile Include="Model\API\GetContactResponse.cs" />
     <Compile Include="Model\API\InitResponse.cs" />
     <Compile Include="Model\API\LoginResponse.cs" />
     <Compile Include="Model\API\StatusNotifyResponse.cs" />
     <Compile Include="Model\List.cs" />
+    <Compile Include="Model\Member.cs" />
     <Compile Include="Model\Synckey.cs" />
     <Compile Include="Model\User.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

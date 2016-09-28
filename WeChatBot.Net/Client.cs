@@ -77,6 +77,20 @@ namespace WeChatBot.Net
         private readonly GlobalConstant _globalConstant = new GlobalConstant();
         private readonly Settings _settings;
 
+        public static readonly IMapper Mapper;
+
+        static Client()
+        {
+            var config = new MapperConfiguration(cfg =>
+            {
+                cfg.CreateMap<NormalMember, Member>();
+                cfg.CreateMap<GroupMember, Member>();
+
+            });
+            Mapper = config.CreateMapper();
+        }
+
+
         public Client() : this(new Settings())
         {
         }
@@ -107,6 +121,8 @@ namespace WeChatBot.Net
             special_list = new List<Member>(); //特殊账号列表
             encry_chat_room_id_list = new ExpandoObject(); //存储群聊的EncryChatRoomId，获取群内成员头像时需要用到
             file_index = 0;
+
+            
         }
 
         public async Task Run()

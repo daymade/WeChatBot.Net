@@ -231,7 +231,8 @@ namespace WeChatBot.Net
                 return false;
             }
 
-            var response = await _redirectUri.GetXmlAsync<LoginResponse>();
+            var response = await _redirectUri.WithClient(HttpClientContainer.GetClient())
+                                             .GetXmlAsync<LoginResponse>();
 
             if (new[] { response.skey, response.wxsid, response.pass_ticket }.Any(string.IsNullOrEmpty) ||
                 response.wxuin <= 0)

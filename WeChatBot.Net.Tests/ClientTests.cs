@@ -92,7 +92,6 @@ namespace WeChatBot.Net.Tests
         [Test]
         public async Task LoginTest_HttpsWithHttpClientTwice_ShouldReturn400()
         {
-            ServicePointManager.SecurityProtocol = SecurityProtocolType.Ssl3 | SecurityProtocolType.Tls12;
             using (var cts = new CancellationTokenSource())
             {
                 cts.CancelAfter(TimeSpan.FromSeconds(5));

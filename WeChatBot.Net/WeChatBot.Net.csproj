@@ -92,12 +92,14 @@
     <Compile Include="Model\AccountInfo.cs" />
     <Compile Include="Model\API\Base\BaseRequest.cs" />
     <Compile Include="Model\API\Base\Baseresponse.cs" />
+    <Compile Include="Model\API\BatchGetGroupMembersReponse.cs" />
     <Compile Include="Model\API\GetContactResponse.cs" />
     <Compile Include="Model\API\InitResponse.cs" />
     <Compile Include="Model\API\LoginResponse.cs" />
     <Compile Include="Model\API\StatusNotifyResponse.cs" />
-    <Compile Include="Model\List.cs" />
+    <Compile Include="Model\GroupChat.cs" />
     <Compile Include="Model\Member.cs" />
+    <Compile Include="Model\MemberType.cs" />
     <Compile Include="Model\Synckey.cs" />
     <Compile Include="Model\User.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />

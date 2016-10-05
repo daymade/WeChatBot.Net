@@ -1,6 +1,5 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.Dynamic;
 using System.Linq;
 using System.Net;
 using System.Text.RegularExpressions;
@@ -39,12 +38,12 @@ namespace WeChatBot.Net
             get
             {
                 return new BaseRequest()
-                {
-                    Skey = _skey,
-                    DeviceID = device_id,
-                    Sid = _wxsid,
-                    Uin = _wxuin
-                };
+                       {
+                           Skey = _skey,
+                           DeviceID = device_id,
+                           Sid = _wxsid,
+                           Uin = _wxuin
+                       };
             }
         }
 
@@ -53,20 +52,47 @@ namespace WeChatBot.Net
             get { return _settings; }
         }
 
-
         private dynamic device_id;
         private dynamic sync_host;
         private dynamic r;
         private dynamic session;
         private dynamic configuration;
-        protected List<Member> MemberList;
-        private List<Member> group_members;
-        private AccountInfo account_info;
-        private List<Member> contact_list;
-        private List<Member> public_list;
-        private List<Member> group_list;
-        private List<Member> special_list;
-        private dynamic encry_chat_room_id_list;
+
+        /// <summary>
+        ///     所有账户, {"group_member":{"id":{"type":"group_member", "info":{}}, ...}, "normal_member":{"id":{}, ...}}
+        /// </summary>
+        protected AccountInfo AccountInfo = new AccountInfo();
+
+        /// <summary>
+        ///     所有群组的成员, {"group_id1": [member1, member2, ...], ...}
+        /// </summary>
+        protected List<GroupChat> GroupChats = new List<GroupChat>();
+
+        /// <summary>
+        ///     所有相关账号: 联系人, 公众号, 群组, 特殊账号
+        /// </summary>
+        protected List<Member> MemberList = new List<Member>();
+
+        /// <summary>
+        ///     联系人列表
+        /// </summary>
+        protected List<Member> ContactList = new List<Member>();
+
+        /// <summary>
+        ///     公众账号列表
+        /// </summary>
+        protected List<Member> PublicList = new List<Member>();
+
+        /// <summary>
+        ///     群聊列表
+        /// </summary>
+        protected List<Member> GroupList = new List<Member>();
+
+        /// <summary>
+        ///     特殊账号列表
+        /// </summary>
+        protected List<Member> SpecialList = new List<Member>();
+
         private dynamic file_index;
 
         private static readonly Random Random = new Random();
@@ -82,14 +108,12 @@ namespace WeChatBot.Net
         static Client()
         {
             var config = new MapperConfiguration(cfg =>
-            {
-                cfg.CreateMap<NormalMember, Member>();
-                cfg.CreateMap<GroupMember, Member>();
-
-            });
+                                                 {
+                                                     cfg.CreateMap<Member, NormalMemberInfo>();
+                                                     cfg.CreateMap<Member, GroupMemberInfo>();
+                                                 });
             Mapper = config.CreateMapper();
         }
-
 
         public Client() : this(new Settings())
         {
@@ -105,24 +129,7 @@ namespace WeChatBot.Net
 
             //configuration = { "qr": "png"}
 
-            //所有相关账号: 联系人, 公众号, 群组, 特殊账号
-            MemberList = new List<Member>();
-
-            //所有群组的成员, {"group_id1": [member1, member2, ...], ...}
-            group_members = new List<Member>();
-
-            //所有账户, {"group_member":{"id":{"type":"group_member", "info":{}}, ...}, "normal_member":{"id":{}, ...}}
-            account_info = new AccountInfo();
-            //{ "group_member": { }, "normal_member": { } }
-
-            contact_list = new List<Member>(); //联系人列表
-            public_list = new List<Member>(); //公众账号列表
-            group_list = new List<Member>(); //群聊列表
-            special_list = new List<Member>(); //特殊账号列表
-            encry_chat_room_id_list = new ExpandoObject(); //存储群聊的EncryChatRoomId，获取群内成员头像时需要用到
             file_index = 0;
-
-            
         }
 
         public async Task Run()
@@ -152,7 +159,7 @@ namespace WeChatBot.Net
                 await ThrowIfFailed(Log(action));
             }
 
-            Logger.Info($@"Get {contact_list.Count()} contacts");
+            Logger.Info($@"Get {ContactList.Count()} contacts");
 
             await ProcessMessage();
         }
@@ -168,12 +175,12 @@ namespace WeChatBot.Net
         {
             var url = @"https://login.weixin.qq.com/jslogin";
             var @params = new
-            {
-                appid = "wx782c26e4c19acffb",
-                fun = "new",
-                lang = "zh_CN",
-                _ = NowUnixShifted()
-            };
+                          {
+                              appid = "wx782c26e4c19acffb",
+                              fun = "new",
+                              lang = "zh_CN",
+                              _ = NowUnixShifted()
+                          };
 
             var data = await url.SetQueryParams(@params)
                                 .WithFlurlClient()
@@ -267,7 +274,7 @@ namespace WeChatBot.Net
 
         private async Task<bool> Login()
         {
-            if (len(_redirectUri) < 4)
+            if (_redirectUri.Length < 4)
             {
                 Logger.Error(@"Login failed due to network problem, please try again.");
                 return false;
@@ -276,7 +283,7 @@ namespace WeChatBot.Net
             var response = await _redirectUri.WithFlurlClient()
                                              .GetXmlAsync<LoginResponse>();
 
-            if (new[] { response.skey, response.wxsid, response.pass_ticket }.Any(string.IsNullOrEmpty) ||
+            if (new[] {response.skey, response.wxsid, response.pass_ticket}.Any(string.IsNullOrEmpty) ||
                 response.wxuin <= 0)
             {
                 return false;
@@ -295,7 +302,7 @@ namespace WeChatBot.Net
             var url = _baseUri + $"/webwxinit?r={NowUnix()}&lang=en_US&pass_ticket={_passTicket}";
 
             var initResponse = await url.WithFlurlClient()
-                                        .PostJsonAsync(new { BaseRequest })
+                                        .PostJsonAsync(new {BaseRequest})
                                         .ReceiveJson<InitResponse>();
 
             MyAccount = initResponse.User;
@@ -310,13 +317,13 @@ namespace WeChatBot.Net
             var url = _baseUri + $@"/webwxstatusnotify?lang=zh_CN&pass_ticket={_passTicket}";
 
             var data = new
-            {
-                BaseRequest,
-                Code = 3,
-                FromUserName = MyAccount.UserName,
-                ToUserName = MyAccount.UserName,
-                ClientMsgId = NowUnix()
-            };
+                       {
+                           BaseRequest,
+                           Code = 3,
+                           FromUserName = MyAccount.UserName,
+                           ToUserName = MyAccount.UserName,
+                           ClientMsgId = NowUnix()
+                       };
             var statusNotifyResponse = await url.WithFlurlClient()
                                                 .PostJsonAsync(data)
                                                 .ReceiveJson<StatusNotifyResponse>();
@@ -331,74 +338,91 @@ namespace WeChatBot.Net
         {
             var url = _baseUri + $@"/webwxgetcontact?pass_ticket={_passTicket}&skey={_skey}&r={NowUnix()}";
             var response = await url.WithFlurlClient()
-                                    .PostJsonAsync(new { })
+                                    .PostJsonAsync(new {})
                                     .ReceiveJson<GetContactResponse>();
 
             MemberList = response.MemberList;
 
-            contact_list = new List<Member>();
-            public_list = new List<Member>();
-            special_list = new List<Member>();
-            group_list = new List<Member>();
+            ContactList = new List<Member>();
+            PublicList = new List<Member>();
+            SpecialList = new List<Member>();
+            GroupList = new List<Member>();
 
             foreach (var contact in MemberList)
             {
                 if (IsPublickAccount(contact)) //# 公众号
                 {
-                    public_list.Add(contact);
-                    AddContact(contact, "public");
+                    PublicList.Add(contact);
+                    AddNormalContact(contact, MemberType.Public);
                 }
                 else if (_globalConstant.SpecialUsers.Contains(contact.UserName)) //# 特殊账户
                 {
-                    special_list.Add(contact);
-                    AddContact(contact, "special");
+                    SpecialList.Add(contact);
+                    AddNormalContact(contact, MemberType.Special);
                 }
                 else if (contact.UserName.StartsWith("@@")) //# 群聊
                 {
-                    group_list.Add(contact);
-                    AddContact(contact, "group");
+                    GroupList.Add(contact);
+                    AddNormalContact(contact, MemberType.Group);
                 }
                 else if (contact.UserName == MyAccount.UserName) //# 自己
                 {
-                    AddContact(contact, "self");
+                    AddNormalContact(contact, MemberType.Self);
                 }
                 else
                 {
-                    contact_list.Add(contact);
-                    AddContact(contact, "contact");
+                    ContactList.Add(contact);
+                    AddNormalContact(contact, MemberType.Contact);
                 }
             }
 
-            await batch_get_group_members();
+            await BatchGetGroupMembers();
 
-            //foreach (var group in group_members)
-            //{
-            //    foreach (var member in group_members[group])
-            //    {
-            //        if (account_info.contains(member["UserName"]))
-            //        {
-            //            account_info["group_member"][member["UserName"]] = new { type = "group_member", info = member, group };
-            //        }
-            //    }
-            //}
+            //TODO what if a contact name been when contact exists in two group
+            foreach (var group in GroupChats)
+            {
+                foreach (var member in group.Members)
+                {
+                    if (AccountInfo.GroupMembers.All(x => x.GroupMemberInfo.UserName != member.UserName))
+                    {
+                        AccountInfo.GroupMembers.Add(new GroupMember()
+                                                     {
+                                                         GroupMemberInfo = Mapper.Map<GroupMemberInfo>(member),
+                                                         GroupName = group.Gid,
+                                                         Type = MemberType.GroupMember
+                                                     });
+                    }
+                }
+            }
 
             return true;
         }
 
-        private void AddContact(Member contact, string type)
+        async Task<bool> BatchGetGroupMembers()
         {
-            
-            account_info.NormalMembers.Add(new NormalMember()
-                                           {
-                                                //  todo fixme Mapper should be created first
-                                               info = Mapper.Map<NormalMemberInfo>(contact),
-                                               type = type
-                                           });
-        }
+            var url = _baseUri + $@"/webwxbatchgetcontact?type=ex&r={NowUnix()}&pass_ticket={_passTicket}";
 
-        private static bool IsPublickAccount(Member contact)
-        {
-            return (contact.VerifyFlag & 8) != 0;
+            var @params = new
+                          {
+                              BaseRequest,
+                              GroupList.Count,
+                              List = GroupList.Select(group => new {group.UserName, EncryChatRoomId = ""}).ToList()
+                          };
+
+            var result = await url.WithFlurlClient()
+                                  .PostJsonAsync(@params)
+                                  .ReceiveJson<BatchGetGroupMembersReponse>();
+
+            var groupChats = result.ContactList.Select(x => new GroupChat()
+                                                            {
+                                                                EncryChatRoomId = x.EncryChatRoomId,
+                                                                Gid = x.UserName,
+                                                                Members = x.MemberList.ToList()
+                                                            }).ToList();
+
+            GroupChats = groupChats;
+
+            return true;
         }
 
         private async Task ProcessMessage()
@@ -407,49 +431,21 @@ namespace WeChatBot.Net
             throw new NotImplementedException();
         }
 
-
-        private int len(string redirectUri)
+        private void AddNormalContact(Member contact, MemberType type)
         {
-            return redirectUri.Length;
+            AccountInfo.NormalMembers.Add(new NormalMember()
+                                          {
+                                              Info = Mapper.Map<NormalMemberInfo>(contact),
+                                              Type = type
+                                          });
         }
 
-
-        /// <summary>
-        ///     批量获取所有群聊成员信息
-        /// </summary>
-        /// <param name=""></param>
-        /// <returns></returns>
-        async Task batch_get_group_members()
+        private static bool IsPublickAccount(Member contact)
         {
-            var url = _baseUri + $@"/webwxbatchgetcontact?type=ex&r={NowUnix()}&pass_ticket={_passTicket}";
-
-            var @params = new
-            {
-                BaseRequest,
-                group_list.Count,
-                List = group_list.Select(group=> new { group.UserName, EncryChatRoomId = "" }).ToList()
-            };
-
-            var q = await url.WithFlurlClient()
-                             .PostJsonAsync(@params).ReceiveString();
-                             //.ReceiveJson<>()
-
-            dynamic group_members = new ExpandoObject();
-            dynamic encry_chat_room_id = new ExpandoObject();
-            //foreach (var group in dic["ContactList"])
-            //{
-            //    var gid = group.UserName;
-            //    var members = group["MemberList"];
-            //    group_members[gid] = members;
-            //    encry_chat_room_id[gid] = group["EncryChatRoomId"];
-            //}
-
-            this.group_members = group_members;
-            encry_chat_room_id_list = encry_chat_room_id;
+            return (contact.VerifyFlag & 8) != 0;
         }
 
-
-        
+        #region Utils
 
         private double NowUnixShifted()
         {
@@ -480,21 +476,7 @@ namespace WeChatBot.Net
             }
             return true;
         }
-    }
 
-    /// <summary>
-    ///     temp stub
-    /// </summary>
-    public class json
-    {
-        public static Dictionary<object, object> loads(dynamic json)
-        {
-            return new Dictionary<object, object>();
-        }
-
-        public static string dumps(object obj)
-        {
-            return "";
-        }
+        #endregion
     }
 }

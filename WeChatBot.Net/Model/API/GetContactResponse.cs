@@ -7,7 +7,7 @@ namespace WeChatBot.Net.Model.API
     {
         public BaseResponse BaseResponse { get; set; }
         public int MemberCount { get; set; }
-        public List<Member> MemberList { get; set; }
+        public List<Model.Member> MemberList { get; set; }
         public int Seq { get; set; }
     }
 }

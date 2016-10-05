@@ -24,11 +24,11 @@ namespace WeChatBot.Net.Tests
         [Ignore("manual run this for debug")]
         public async Task RunTest_Normal_ShouldOuputQRCode()
         {
-            var client = new Client
-                         {
-                             Debug = true,
-                             QRCodeOutputType = QRCodeOutputType.TTY
-                         };
+            var client = new Client(new Settings()
+                                    {
+                                        Debug = true,
+                                        QRCodeOutputType = QRCodeOutputType.TTY
+                                    });
             await client.Run();
 
             Assert.Pass();
@@ -58,13 +58,14 @@ namespace WeChatBot.Net.Tests
         public async Task LoginTest_HttpsWithFlurlClientTwice_ShouldReturn400()
         {
             var url = @"https://login.weixin.qq.com/cgi-bin/mmwebwx-bin/login?tip=1&uuid=YenIkE0Lsw==&_=1474877000";
+            var flurlClient = new FlurlClient() {AutoDispose = false};
             {
-                var q = await url.WithClient(new FlurlClient() {AutoDispose = false}).GetAsyncSafe();
+                var q = await url.WithClient(flurlClient).GetAsyncSafe();
                 Assert.That(q.IsSuccessStatusCode);
                 await q.Content.ReadAsStringAsync();
             }
             {
-                var q = await url.WithClient(new FlurlClient() {AutoDispose = false}).GetAsyncSafe();
+                var q = await url.WithClient(flurlClient).GetAsyncSafe();
                 Assert.That(q.IsSuccessStatusCode);
             }
         }

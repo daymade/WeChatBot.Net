@@ -8,15 +8,15 @@ namespace WeChatBot.Net.Model
 {
     public class AccountInfo
     {
-        public List<GroupMember> GroupMembers { get; set; }
-        public List<NormalMember> NormalMembers { get; set; }
+        public List<GroupMember> GroupMembers { get; set; } = new List<GroupMember>();
+        public List<NormalMember> NormalMembers { get; set; } = new List<NormalMember>();
     }
 
     public class GroupMember
     {
         public GroupMemberInfo GroupMemberInfo { get; set; }
-        public string group { get; set; }
-        public string type { get; set; }
+        public string GroupName { get; set; }
+        public MemberType Type { get; set; }
     }
 
     public class GroupMemberInfo
@@ -36,8 +36,8 @@ namespace WeChatBot.Net.Model
 
     public class NormalMember
     {
-        public NormalMemberInfo info { get; set; }
-        public string type { get; set; }
+        public NormalMemberInfo Info { get; set; }
+        public MemberType Type { get; set; }
     }
 
     public class NormalMemberInfo

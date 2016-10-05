@@ -1,6 +1,15 @@
-namespace WeChatBot.Net.Model
+using WeChatBot.Net.Model.API.Base;
+
+namespace WeChatBot.Net.Model.API
 {
-    public class Member
+    public class BatchGetGroupMembersReponse
+    {
+        public BaseResponse BaseResponse { get; set; }
+        public int Count { get; set; }
+        public Contactlist[] ContactList { get; set; }
+    }
+
+    public class Contactlist
     {
         public int Uin { get; set; }
         public string UserName { get; set; }
@@ -8,13 +17,13 @@ namespace WeChatBot.Net.Model
         public string HeadImgUrl { get; set; }
         public int ContactFlag { get; set; }
         public int MemberCount { get; set; }
-        public object[] MemberList { get; set; }
+        public Member[] MemberList { get; set; }
         public string RemarkName { get; set; }
         public int HideInputBarFlag { get; set; }
         public int Sex { get; set; }
         public string Signature { get; set; }
         public int VerifyFlag { get; set; }
-        public int OwnerUin { get; set; }
+        public long OwnerUin { get; set; }
         public string PYInitial { get; set; }
         public string PYQuanPin { get; set; }
         public string RemarkPYInitial { get; set; }
@@ -32,6 +41,5 @@ namespace WeChatBot.Net.Model
         public int ChatRoomId { get; set; }
         public string KeyWord { get; set; }
         public string EncryChatRoomId { get; set; }
-        public int MemberStatus { get; set; }
     }
 }

@@ -1,10 +1,12 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Net;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Web;
 using AutoMapper;
 using Flurl;
 using Flurl.Http;
@@ -31,19 +33,26 @@ namespace WeChatBot.Net
         protected string UUID;
         protected User MyAccount;
         protected Synckey SyncKey;
-        protected string SyncKeyAsString;
+
+        protected string SyncKeyAsString
+        {
+            get
+            {
+                return string.Join("|", SyncKey.List.Select(x => $@"{x.Key}_{x.Val}"));
+            }
+        }
 
         protected BaseRequest BaseRequest
         {
             get
             {
                 return new BaseRequest()
-                       {
-                           Skey = _skey,
-                           DeviceID = device_id,
-                           Sid = _wxsid,
-                           Uin = _wxuin
-                       };
+                {
+                    Skey = _skey,
+                    DeviceID = device_id,
+                    Sid = _wxsid,
+                    Uin = _wxuin
+                };
             }
         }
 
@@ -52,10 +61,9 @@ namespace WeChatBot.Net
             get { return _settings; }
         }
 
-        private dynamic device_id;
-        private dynamic sync_host;
-        private dynamic r;
-        private dynamic session;
+        private string device_id;
+        private string sync_host;
+        //private dynamic r;
         private dynamic configuration;
 
         /// <summary>
@@ -152,16 +160,22 @@ namespace WeChatBot.Net
                               Login,
                               Init,
                               StatusNotify,
-                              GetContact
+                              GetContact,
+                              TestSyncCheck
                           };
             foreach (var action in actions)
             {
                 await ThrowIfFailed(Log(action));
             }
 
-            Logger.Info($@"Get {ContactList.Count()} contacts");
+            Logger.Info(@"Start to process messages .");
 
-            await ProcessMessage();
+            await Task.WhenAll(CreatePollingTimerAsync(() => true,
+                                                       TimeSpan.FromSeconds(30),
+                                                       async () => await ProcessMessage()),
+                               CreatePollingTimerAsync(() => true,
+                                                       TimeSpan.FromSeconds(30),
+                                                       async () => await Schedule()));
         }
 
         /// <summary>
@@ -175,18 +189,17 @@ namespace WeChatBot.Net
         {
             var url = @"https://login.weixin.qq.com/jslogin";
             var @params = new
-                          {
-                              appid = "wx782c26e4c19acffb",
-                              fun = "new",
-                              lang = "zh_CN",
-                              _ = NowUnixShifted()
-                          };
+            {
+                appid = "wx782c26e4c19acffb",
+                fun = "new",
+                lang = "zh_CN",
+                _ = NowUnixShifted()
+            };
 
             var data = await url.SetQueryParams(@params)
                                 .WithFlurlClient()
-                                .EnableCookies()
                                 .WithHeader("Cache-Control", "no-cache, must-revalidate")
-                                .GetStringAsync().ConfigureAwait(false);
+                                .GetStringAsync();
 
             var match = Regex.Match(data, @"window.QRLogin.code = (?<code>\d+); window.QRLogin.uuid = ""(?<uuid>\S+?)""");
             if (!match.Success)
@@ -227,8 +240,14 @@ namespace WeChatBot.Net
                 var response = await url.WithFlurlClient()
                                         .GetStringAsync();
 
-                var code = Regex.Match(response, @"window.code=(\d+);").Groups[1].Value;
+                var extractCode = Regex.Match(response, @"window.code=(\d+);");
+                if (!extractCode.Success)
+                {
+                    Logger.Error($"response : {response}");
+                    return false;
+                }
 
+                var code = extractCode.Groups[1].Value;
                 if (code == HttpStatusCode.Created.ToString("d"))
                 {
                     Logger.Info("Please confirm to login .");
@@ -236,7 +255,14 @@ namespace WeChatBot.Net
                 }
                 else if (code == HttpStatusCode.OK.ToString("d")) //# 确认登录成功
                 {
-                    var redirectUri = Regex.Match(response, @"window.redirect_uri=""(\S+?)"";", RegexOptions.Multiline | RegexOptions.IgnoreCase).Groups[1].Value;
+                    var extractUri = Regex.Match(response, @"window.redirect_uri=""(\S+?)"";", RegexOptions.Multiline | RegexOptions.IgnoreCase);
+                    if (!extractUri.Success)
+                    {
+                        Logger.Error($"response : {response}");
+                        return false;
+                    }
+
+                    var redirectUri = extractUri.Groups[1].Value;
                     if (string.IsNullOrEmpty(redirectUri))
                     {
                         Logger.Error("redirect_uri not found");
@@ -283,7 +309,7 @@ namespace WeChatBot.Net
             var response = await _redirectUri.WithFlurlClient()
                                              .GetXmlAsync<LoginResponse>();
 
-            if (new[] {response.skey, response.wxsid, response.pass_ticket}.Any(string.IsNullOrEmpty) ||
+            if (new[] { response.skey, response.wxsid, response.pass_ticket }.Any(string.IsNullOrEmpty) ||
                 response.wxuin <= 0)
             {
                 return false;
@@ -302,12 +328,11 @@ namespace WeChatBot.Net
             var url = _baseUri + $"/webwxinit?r={NowUnix()}&lang=en_US&pass_ticket={_passTicket}";
 
             var initResponse = await url.WithFlurlClient()
-                                        .PostJsonAsync(new {BaseRequest})
+                                        .PostJsonAsync(new { BaseRequest })
                                         .ReceiveJson<InitResponse>();
 
             MyAccount = initResponse.User;
             SyncKey = initResponse.SyncKey;
-            SyncKeyAsString = string.Join("|", SyncKey.List.Select(x => $@"{x.Key}_{x.Val}"));
 
             return initResponse.BaseResponse.Ret == 0;
         }
@@ -317,13 +342,13 @@ namespace WeChatBot.Net
             var url = _baseUri + $@"/webwxstatusnotify?lang=zh_CN&pass_ticket={_passTicket}";
 
             var data = new
-                       {
-                           BaseRequest,
-                           Code = 3,
-                           FromUserName = MyAccount.UserName,
-                           ToUserName = MyAccount.UserName,
-                           ClientMsgId = NowUnix()
-                       };
+            {
+                BaseRequest,
+                Code = 3,
+                FromUserName = MyAccount.UserName,
+                ToUserName = MyAccount.UserName,
+                ClientMsgId = NowUnix()
+            };
             var statusNotifyResponse = await url.WithFlurlClient()
                                                 .PostJsonAsync(data)
                                                 .ReceiveJson<StatusNotifyResponse>();
@@ -338,7 +363,7 @@ namespace WeChatBot.Net
         {
             var url = _baseUri + $@"/webwxgetcontact?pass_ticket={_passTicket}&skey={_skey}&r={NowUnix()}";
             var response = await url.WithFlurlClient()
-                                    .PostJsonAsync(new {})
+                                    .PostJsonAsync(new { })
                                     .ReceiveJson<GetContactResponse>();
 
             MemberList = response.MemberList;
@@ -386,14 +411,16 @@ namespace WeChatBot.Net
                     if (AccountInfo.GroupMembers.All(x => x.GroupMemberInfo.UserName != member.UserName))
                     {
                         AccountInfo.GroupMembers.Add(new GroupMember()
-                                                     {
-                                                         GroupMemberInfo = Mapper.Map<GroupMemberInfo>(member),
-                                                         GroupName = group.Gid,
-                                                         Type = MemberType.GroupMember
-                                                     });
+                        {
+                            GroupMemberInfo = Mapper.Map<GroupMemberInfo>(member),
+                            GroupName = group.Gid,
+                            Type = MemberType.GroupMember
+                        });
                     }
                 }
             }
+
+            Logger.Info($@"Get {ContactList.Count} contacts");
 
             return true;
         }
@@ -403,47 +430,365 @@ namespace WeChatBot.Net
             var url = _baseUri + $@"/webwxbatchgetcontact?type=ex&r={NowUnix()}&pass_ticket={_passTicket}";
 
             var @params = new
-                          {
-                              BaseRequest,
-                              GroupList.Count,
-                              List = GroupList.Select(group => new {group.UserName, EncryChatRoomId = ""}).ToList()
-                          };
+            {
+                BaseRequest,
+                GroupList.Count,
+                List = GroupList.Select(group => new { group.UserName, EncryChatRoomId = "" }).ToList()
+            };
 
             var result = await url.WithFlurlClient()
                                   .PostJsonAsync(@params)
                                   .ReceiveJson<BatchGetGroupMembersReponse>();
 
             var groupChats = result.ContactList.Select(x => new GroupChat()
-                                                            {
-                                                                EncryChatRoomId = x.EncryChatRoomId,
-                                                                Gid = x.UserName,
-                                                                Members = x.MemberList.ToList()
-                                                            }).ToList();
+            {
+                EncryChatRoomId = x.EncryChatRoomId,
+                Gid = x.UserName,
+                Members = x.MemberList.ToList()
+            }).ToList();
 
             GroupChats = groupChats;
 
             return true;
         }
 
+        /// <summary>Starts an asynchronous polling timer, similar to a thread timer.</summary>
+        /// <param name="condition">The condition which indicates that polling should continue.</param>
+        /// <param name="pollInterval">Similar to a timer tick, this determines the polling frequency.</param>
+        /// <param name="pollingAction">The action to be executed after each poll interval, as long as the condition
+        /// evaluates to true. This works like a timer event handler.</param>
+        /// <param name="afterAction">An optional action to be executed after the condition evaluates to false.</param>
+        protected async Task CreatePollingTimerAsync(Func<bool> condition, TimeSpan pollInterval, Action pollingAction, Action afterAction = null)
+        {
+            Debug.Assert(condition != null, "condition != null");
+            while (condition())
+            {
+                await Task.Delay(pollInterval);
+
+                if (condition())
+                {
+                    pollingAction();
+                }
+            }
+
+            afterAction?.Invoke();
+        }
+
         private async Task ProcessMessage()
         {
-            Logger.Info(@"Start to process messages .");
+            var stopwatch = Stopwatch.StartNew();
+            try
+            {
+                var result = await this.SyncCheck();
+
+                var retcode = result?.Item1;
+                var selector = result?.Item2;
+
+                if (Settings.Debug)
+                {
+                    Logger.Info($@"[DEBUG] sync_check: {retcode}, {selector}");
+                }
+
+                if (retcode == 1100 ||
+                    retcode == 1101 ||
+                    (retcode == 0 && selector == 0))
+                {
+                    return;
+                }
+
+                if (retcode == 0)
+                {
+                    var r = await Sync();
+                    if (r != null)
+                    {
+                        await this.HandleMessage(r);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($@"Except in proc_msg: {ex}");
+            }
+            finally
+            {
+                var elapsedMilliseconds = stopwatch.ElapsedMilliseconds;
+                if (elapsedMilliseconds < 800)
+                {
+                    await Task.Delay(TimeSpan.FromMilliseconds(1000 - elapsedMilliseconds));
+                }
+            }
+        }
+
+        private async Task<SyncResponse> Sync()
+        {
+            var url = $@"{_baseUri}/webwxsync?sid={_wxsid}key={_skey}&lang=en_US&pass_ticket={_passTicket}";
+            var @params = new
+            {
+                BaseRequest = BaseRequest,
+                SyncKey = SyncKey,
+                rr = ~NowUnix()
+            };
+            try
+            {
+                //bug can not change http timeout 
+                var r = await url.WithFlurlClient()
+                                 .PostJsonAsync(@params)
+                                 .ReceiveJson<SyncResponse>();
+
+                if (r.BaseResponse.Ret == 0)
+                {
+                    SyncKey = r.SyncKey;
+                    return r;
+                }
+
+                return null;
+            }
+            catch (Exception ex)
+            {
+                Logger.Error($@"Sync exception: {ex}");
+                return null;
+            }
+        }
+
+
+        /// <summary>
+        /// 
+        ///  处理原始微信消息的内部函数
+        ///  msg_type_id:
+        ///      0->Init
+        ///      1->Self
+        ///      2->FileHelper
+        ///      3->Group
+        ///      4->Contact
+        ///      5->Public
+        ///      6->Special
+        ///      99->Unknown
+        ///  :param r: 原始微信消息
+        /// 
+        /// </summary>
+        /// <returns></returns>
+        private async Task HandleMessage(SyncResponse response)
+        {
+            foreach (dynamic msg in response.AddMsgList)
+            {
+                var msg_type_id = 99;
+                var user = new Message.User() {id = msg.FromUserName, name = "unknown"};
+
+                if (msg.MsgType == 51) //init message
+                {
+                    msg_type_id = 0;
+                    user.name = "system";
+                }
+                else if (msg.MsgType == 37) //friend request
+                {
+                    msg_type_id = 37;
+                    //
+                    // content = msg["Content"]
+                    // username = content[content.index("fromusername="): content.index("encryptusername")]
+                    // username = username[username.index(""") + 1: username.rindex(""")]
+                    // print u"[Friend Request]"
+                    // print u"       Nickname：" + msg["RecommendInfo"]["NickName"]
+                    // print u"       附加消息："+msg["RecommendInfo"]["Content"]
+                    // # print u"Ticket："+msg["RecommendInfo"]["Ticket"] # Ticket添加好友时要用
+                    // print u"       微信号："+username #未设置微信号的 腾讯会自动生成一段微信ID 但是无法通过搜索 搜索到此人
+                    //
+                    continue;
+                }
+                else if (msg.FromUserName == MyAccount.UserName) //# Self
+                {
+                    msg_type_id = 1;
+                    user.name = "this";
+                }
+                else if (msg["ToUserName"] == "filehelper") //# File Helper
+                {
+                    msg_type_id = 2;
+                    user.name = "file_helper";
+                }
+                else
+                {
+                    var contactName = this.GetContactName(user.id);
+
+                    var contactPreferName = contactName.HasValue? contactName.Value : "unknown";
+
+                    if (msg.FromUserName.StartWith("@@")) //# Group
+                    {
+                        msg_type_id = 3;
+                        user.name = contactPreferName;
+                    }
+                    else if (this.IsContact(msg.FromUserName)) //# Contact
+                    {
+                        msg_type_id = 4;
+                        user.name = contactPreferName;
+                    }
+                    else if (this.IsPublic(msg.FromUserName)) //# Public
+                    {
+                        msg_type_id = 5;
+                        user.name = contactPreferName;
+                    }
+                    else if (this.IsSpecial(msg.FromUserName)) //# Special
+                    {
+                        msg_type_id = 6;
+                        user.name = contactPreferName;
+                    }
+                }
+
+                if (string.IsNullOrEmpty(user.name))
+                {
+                    user.name = "unknown";
+                }
+                user.name = HttpUtility.HtmlDecode(user.name);
+
+                if (Settings.Debug &&
+                    msg_type_id != 0)
+                {
+                    Logger.Info($@"[MSG] user.name:");
+                }
+
+                var content = this.extract_msg_content(msg_type_id, msg);
+                var message = new Message()
+                              {
+                                  msg_type_id = msg_type_id,
+                                  msg_id = msg["MsgId"],
+                                  content = content,
+                                  to_user_id = msg["ToUserName"],
+                                  user = user
+                              };
+                handle_msg_all(message);
+            }
+        }
+
+        private ContactName GetContactName(string uid)
+        {
+            var normalMember = AccountInfo.NormalMembers.FirstOrDefault(x=>x.Info.UserName == uid);
+            if (normalMember == null)
+            {
+                return null;
+            }
+
+            var info = normalMember.Info;
+            var contactName = new ContactName()
+                              {
+                                  RemarkName = info?.RemarkName,
+                                  Nickname = info?.NickName,
+                                  DisplayName = info?.DisplayName
+                              };
+            return contactName;
+        }
+
+        /// <summary>
+        /// content_type_id:
+        ///     0 -> Text
+        ///     1 -> Location
+        ///     3 -> Image
+        ///     4 -> Voice
+        ///     5 -> Recommend
+        ///     6 -> Animation
+        ///     7 -> Share
+        ///     8 -> Video
+        ///     9 -> VideoCall
+        ///     10 -> Redraw
+        ///     11 -> Empty
+        ///     99 -> Unknown
+        /// :param msg_type_id: 消息类型id
+        /// :param msg: 消息结构体
+        /// :return: 解析的消息
+        /// 
+        /// </summary>
+        /// <param name="msgTypeId"></param>
+        /// <param name="msg"></param>
+        /// <returns></returns>
+        private MessageContent extract_msg_content(int msgTypeId, object msg)
+        {
             throw new NotImplementedException();
         }
 
+        private void handle_msg_all(Message message)
+        {
+            throw new NotImplementedException();
+        }
+
+        private async Task Schedule()
+        {
+            throw new NotImplementedException($"{nameof(Schedule)} NotImplemented");
+        }
+
+        private async Task<bool> TestSyncCheck()
+        {
+            foreach (var host in new[] { "webpush", "webpush2" })
+            {
+                sync_host = host;
+                var response = await SyncCheck();
+                if (response?.Item1 == 0)
+                {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        private async Task<Tuple<int, int>> SyncCheck()
+        {
+            var @params = new
+            {
+                r = NowUnix(),
+                sid = _wxsid,
+                uin = _wxuin,
+                skey = _skey,
+                deviceid = device_id,
+                synckey = SyncKeyAsString,
+                _ = NowUnix(),
+            };
+            var url = $@"https://{sync_host}.weixin.qq.com/cgi-bin/mmwebwx-bin/synccheck?".SetQueryParams(@params);
+            try
+            {
+                var data = await url.WithClient(new FlurlClient())
+                                    .GetStringAsync();
+
+                var pm = Regex.Match(data, @"window\.synccheck={retcode:""(\d+)"",selector:""(\d+)""}");
+                if (!pm.Success)
+                {
+                    return null;
+                }
+
+                var retcode = int.Parse(pm.Groups[1].Value);
+                var selector = int.Parse(pm.Groups[2].Value);
+                return new Tuple<int, int>(retcode, selector);
+            }
+            catch (Exception ex)
+            {
+                Logger.Info($@"exception: {ex.Message}");
+                return null;
+            }
+        }
+
+        #region Helpers
         private void AddNormalContact(Member contact, MemberType type)
         {
             AccountInfo.NormalMembers.Add(new NormalMember()
-                                          {
-                                              Info = Mapper.Map<NormalMemberInfo>(contact),
-                                              Type = type
-                                          });
+            {
+                Info = Mapper.Map<NormalMemberInfo>(contact),
+                Type = type
+            });
         }
-
         private static bool IsPublickAccount(Member contact)
         {
             return (contact.VerifyFlag & 8) != 0;
         }
+        private bool IsSpecial(string fromUserName)
+        {
+            return SpecialList.Any(x => x.UserName == fromUserName);
+        }
+
+        private bool IsPublic(string fromUserName)
+        {
+            return PublicList.Any(x => x.UserName == fromUserName);
+        }
+
+        private bool IsContact(string fromUserName)
+        {
+            return ContactList.Any(x => x.UserName == fromUserName);
+        }
+        #endregion Helpers
 
         #region Utils
 
@@ -463,7 +808,7 @@ namespace WeChatBot.Net
             var result = await action();
 
             var resultDescripitn = result ? "succeed" : "failed";
-            Logger.Info($@"Web WeChat {action.Method.Name} {resultDescripitn} .");
+            Logger.Info($@"{action.Method.Name} {resultDescripitn} .");
 
             return result;
         }
@@ -477,6 +822,10 @@ namespace WeChatBot.Net
             return true;
         }
 
-        #endregion
+        #endregion Utils
+    }
+
+    internal class MessageContent
+    {
     }
 }

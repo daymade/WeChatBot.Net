@@ -4,12 +4,34 @@ using System.Threading;
 using System.Threading.Tasks;
 using Flurl;
 using Flurl.Http;
+using Flurl.Http.Configuration;
 using WeChatBot.Net.Helper;
 
 namespace WeChatBot.Net.Extensions
 {
     public static class FlurlClientExtensions
     {
+        /// <summary>
+        /// </summary>
+        /// <param name="flurlClient"></param>
+        public static FlurlClient WithNewHttpClient(this FlurlClient flurlClient)
+        {
+            var client = new FlurlClient()
+                         {
+                             AutoDispose = true
+                         }
+                        .EnableCookies()
+                        .ConfigureClient(x =>
+                                         {
+                                             x.HttpClientFactory = new CustomHttpClientFactory();
+                                         })
+                        .WithUrl(flurlClient.Url)
+                        .WithCookies(flurlClient.Cookies)
+                        .WithHeaders(flurlClient.HttpClient.DefaultRequestHeaders)
+                        ;
+            return client;
+        }
+        
         /// <summary>
         /// Fluently specify that an existing FlurlClient should be used to call the Url, rather than creating a new one.
         /// Enables re-using the underlying HttpClient.

@@ -23,6 +23,8 @@ namespace WeChatBot.Net
     public class Client
     {
         private string _baseUri;
+        //FIX 1102
+        private string _baseHost;
         private string _redirectUri;
 
         private string _wxsid;
@@ -274,6 +276,8 @@ namespace WeChatBot.Net
                     _redirectUri = redirectUrl;
                     _baseUri = redirectUri.Substring(0, redirectUri.LastIndexOf("/", StringComparison.Ordinal));
 
+                    var tempHost = _baseUri.Substring(8);
+                    _baseHost = tempHost.Substring(0, tempHost.IndexOf("/", StringComparison.Ordinal));
                     return true;
                 }
                 else if (code == HttpStatusCode.RequestTimeout.ToString("d"))
@@ -714,14 +718,15 @@ namespace WeChatBot.Net
 
         private async Task<bool> TestSyncCheck()
         {
-            foreach (var host in new[] { "webpush", "webpush2" })
+            foreach (var hostPrefix in new[] { "webpush", "webpush2" })
             {
-                sync_host = host;
+                sync_host = $@"{hostPrefix}.{_baseHost}";
                 var response = await SyncCheck();
                 if (response?.Item1 == 0)
                 {
                     return true;
                 }
+                Logger.Error($@"SyncCheck: {response} ");
             }
             return false;
         }
@@ -738,10 +743,11 @@ namespace WeChatBot.Net
                 synckey = SyncKeyAsString,
                 _ = NowUnix(),
             };
-            var url = $@"https://{sync_host}.weixin.qq.com/cgi-bin/mmwebwx-bin/synccheck?".SetQueryParams(@params);
+            
+            var url = $@"https://{sync_host}/cgi-bin/mmwebwx-bin/synccheck?".SetQueryParams(@params);
             try
             {
-                var data = await url.WithClient(new FlurlClient())
+                var data = await url.WithFlurlClient()
                                     .GetStringAsync();
 
                 var pm = Regex.Match(data, @"window\.synccheck={retcode:""(\d+)"",selector:""(\d+)""}");
@@ -756,7 +762,7 @@ namespace WeChatBot.Net
             }
             catch (Exception ex)
             {
-                Logger.Info($@"exception: {ex.Message}");
+                Logger.Error($@"exception: {ex.Message}");
                 return null;
             }
         }

@@ -33,7 +33,7 @@ namespace WeChatBot.Net.Tests
         public async Task GetUuidTest_Normal_ShouldReturnTrue()
         {
             var q = await new Client().GetUuid();
-            Assert.IsTrue(q.Item1);
+            Assert.IsTrue(q.HasValue);
         }
 
         [Test]

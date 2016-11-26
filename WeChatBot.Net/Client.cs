@@ -145,16 +145,16 @@ namespace WeChatBot.Net
         public async Task Run()
         {
             var getUuidSuccess = await GetUuid();
-            if (!getUuidSuccess.Item1)
+            if (!getUuidSuccess.HasValue)
             {
-                Logger.Error("Failed to get login token. ");
+                Logger.Error("Failed to get login token.");
             }
 
-            UUID = getUuidSuccess.Item2;
+            UUID = getUuidSuccess.UUID;
 
             await QRCodeHelper.ShowQRCode(UUID, _settings.QRCodeOutputType);
 
-            Logger.Info("Please use WeChat to scan the QR code .");
+            Logger.Info("Please use WeChat to scan the QR code.");
 
             var actions = new List<Func<Task<bool>>>()
                           {
@@ -170,7 +170,7 @@ namespace WeChatBot.Net
                 await ThrowIfFailed(Log(action));
             }
 
-            Logger.Info(@"Start to process messages .");
+            Logger.Info(@"Start to process messages.");
 
             await Task.WhenAll(CreatePollingTimerAsync(() => true,
                                                        TimeSpan.FromSeconds(30),
@@ -187,7 +187,7 @@ namespace WeChatBot.Net
         /// <remarks>
         ///     If failed, uuid will be empty string
         /// </remarks>
-        public async Task<Tuple<bool, string>> GetUuid()
+        public async Task<Uuid> GetUuid()
         {
             var url = @"https://login.weixin.qq.com/jslogin";
             var @params = new
@@ -204,15 +204,17 @@ namespace WeChatBot.Net
                                 .GetStringAsync();
 
             var match = Regex.Match(data, @"window.QRLogin.code = (?<code>\d+); window.QRLogin.uuid = ""(?<uuid>\S+?)""");
-            if (!match.Success)
+            var code = match.Groups["code"].Value;
+
+            if (!match.Success || code != "200")
             {
-                return new Tuple<bool, string>(false, "");
+                return Uuid.Null;
             }
 
-            var code = match.Groups["code"].Value;
+
             var uuid = match.Groups["uuid"].Value;
 
-            return new Tuple<bool, string>(code == "200", uuid);
+            return new Uuid(uuid);
         }
 
         /// <summary>
@@ -576,7 +578,7 @@ namespace WeChatBot.Net
             foreach (dynamic msg in response.AddMsgList)
             {
                 var msg_type_id = 99;
-                var user = new Message.User() {id = msg.FromUserName, name = "unknown"};
+                var user = new Message.User() { id = msg.FromUserName, name = "unknown" };
 
                 if (msg.MsgType == 51) //init message
                 {
@@ -612,7 +614,7 @@ namespace WeChatBot.Net
                 {
                     var contactName = this.GetContactName(user.id);
 
-                    var contactPreferName = contactName.HasValue? contactName.Value : "unknown";
+                    var contactPreferName = contactName.HasValue ? contactName.Value : "unknown";
 
                     if (msg.FromUserName.StartWith("@@")) //# Group
                     {
@@ -650,20 +652,20 @@ namespace WeChatBot.Net
 
                 var content = this.extract_msg_content(msg_type_id, msg);
                 var message = new Message()
-                              {
-                                  msg_type_id = msg_type_id,
-                                  msg_id = msg["MsgId"],
-                                  content = content,
-                                  to_user_id = msg["ToUserName"],
-                                  user = user
-                              };
+                {
+                    msg_type_id = msg_type_id,
+                    msg_id = msg["MsgId"],
+                    content = content,
+                    to_user_id = msg["ToUserName"],
+                    user = user
+                };
                 handle_msg_all(message);
             }
         }
 
         private ContactName GetContactName(string uid)
         {
-            var normalMember = AccountInfo.NormalMembers.FirstOrDefault(x=>x.Info.UserName == uid);
+            var normalMember = AccountInfo.NormalMembers.FirstOrDefault(x => x.Info.UserName == uid);
             if (normalMember == null)
             {
                 return null;
@@ -671,11 +673,11 @@ namespace WeChatBot.Net
 
             var info = normalMember.Info;
             var contactName = new ContactName()
-                              {
-                                  RemarkName = info?.RemarkName,
-                                  Nickname = info?.NickName,
-                                  DisplayName = info?.DisplayName
-                              };
+            {
+                RemarkName = info?.RemarkName,
+                Nickname = info?.NickName,
+                DisplayName = info?.DisplayName
+            };
             return contactName;
         }
 
@@ -743,7 +745,7 @@ namespace WeChatBot.Net
                 synckey = SyncKeyAsString,
                 _ = NowUnix(),
             };
-            
+
             var url = $@"https://{sync_host}/cgi-bin/mmwebwx-bin/synccheck?".SetQueryParams(@params);
             try
             {

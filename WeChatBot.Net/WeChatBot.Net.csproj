@@ -105,6 +105,7 @@
     <Compile Include="Model\MemberType.cs" />
     <Compile Include="Model\Synckey.cs" />
     <Compile Include="Model\User.cs" />
+    <Compile Include="Model\Uuid.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Settings.cs" />
     <Compile Include="Util\ConsoleWriter.cs" />

@@ -15,15 +15,15 @@ namespace WeChatBot.Net.Helper
         static HttpClientContainer()
         {
             FlurlClient = new FlurlClient()
-                          {
-                              AutoDispose = false
-                          }
+            {
+                AutoDispose = false
+            }
                           .EnableCookies()
                           .ConfigureClient(x =>
                                            {
                                                x.AfterCall = call =>
                                                              {
-                                                                 Logger.Info($@" call.Duration: {call.Duration}ms");
+                                                                 Logger.Info($@"Call.Duration: {call.Duration?.TotalMilliseconds}ms");
                                                              };
                                                x.HttpClientFactory = new CustomHttpClientFactory();
                                            })

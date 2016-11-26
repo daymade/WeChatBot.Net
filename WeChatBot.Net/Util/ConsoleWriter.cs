@@ -7,7 +7,7 @@ namespace WeChatBot.Net.Util
 {
     public class ConsoleWriter
     {
-        private const string Black = "¨€";
+        private const string Black = "¡ö";
         private const string White = "¡¡";
 
         /// <summary>

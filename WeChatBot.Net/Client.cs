@@ -30,7 +30,7 @@ namespace WeChatBot.Net
         private string _wxsid;
         private string _skey;
         private string _passTicket;
-        private int _wxuin;
+        private long _wxuin;
 
         protected string UUID;
         protected User MyAccount;

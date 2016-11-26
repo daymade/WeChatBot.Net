@@ -2,7 +2,7 @@ namespace WeChatBot.Net.Model
 {
     public class User
     {
-        public int Uin { get; set; }
+        public long Uin { get; set; }
         public string UserName { get; set; }
         public string NickName { get; set; }
         public string HeadImgUrl { get; set; }

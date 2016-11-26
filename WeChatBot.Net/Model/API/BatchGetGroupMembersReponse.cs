@@ -11,7 +11,7 @@ namespace WeChatBot.Net.Model.API
 
     public class Contactlist
     {
-        public int Uin { get; set; }
+        public long Uin { get; set; }
         public string UserName { get; set; }
         public string NickName { get; set; }
         public string HeadImgUrl { get; set; }

@@ -26,7 +26,7 @@ namespace WeChatBot.Net.Model
         public string DisplayName { get; set; }
         public string KeyWord { get; set; }
         public string PYInitial { get; set; }
-        public int Uin { get; set; }
+        public long Uin { get; set; }
         public int MemberStatus { get; set; }
         public string PYQuanPin { get; set; }
         public string RemarkPYInitial { get; set; }
@@ -69,7 +69,7 @@ namespace WeChatBot.Net.Model
         public string NickName { get; set; }
         public string RemarkPYQuanPin { get; set; }
         public string HeadImgUrl { get; set; }
-        public int Uin { get; set; }
+        public long Uin { get; set; }
         public int StarFriend { get; set; }
         public int Statues { get; set; }
     }

@@ -18,7 +18,7 @@ namespace WeChatBot.Net.Model.API
 
         private string wxsidField;
 
-        private int wxuinField;
+        private long wxuinField;
 
         private string pass_ticketField;
 
@@ -77,7 +77,7 @@ namespace WeChatBot.Net.Model.API
         }
 
         /// <remarks/>
-        public int wxuin
+        public long wxuin
         {
             get
             {

@@ -156,7 +156,7 @@ namespace WeChatBot.Net
 
             Logger.Info("Please use WeChat to scan the QR code.");
 
-            var actions = new List<Func<Task<bool>>>()
+            var actions = new List<Func<Task<bool>>>
                           {
                               WaitingUserProcessing,
                               Login,
@@ -487,8 +487,8 @@ namespace WeChatBot.Net
             {
                 var result = await this.SyncCheck();
 
-                var retcode = result?.Item1;
-                var selector = result?.Item2;
+                var retcode = result?.RetCode;
+                var selector = result?.Selector;
 
                 if (Settings.Debug)
                 {
@@ -724,7 +724,7 @@ namespace WeChatBot.Net
             {
                 sync_host = $@"{hostPrefix}.{_baseHost}";
                 var response = await SyncCheck();
-                if (response?.Item1 == 0)
+                if (response?.RetCode == 0)
                 {
                     return true;
                 }
@@ -733,7 +733,7 @@ namespace WeChatBot.Net
             return false;
         }
 
-        private async Task<Tuple<int, int>> SyncCheck()
+        private async Task<SyncResult> SyncCheck()
         {
             var @params = new
             {
@@ -760,7 +760,7 @@ namespace WeChatBot.Net
 
                 var retcode = int.Parse(pm.Groups[1].Value);
                 var selector = int.Parse(pm.Groups[2].Value);
-                return new Tuple<int, int>(retcode, selector);
+                return new SyncResult(retcode, selector);
             }
             catch (Exception ex)
             {

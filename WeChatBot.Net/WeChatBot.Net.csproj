@@ -104,6 +104,7 @@
     <Compile Include="Model\Member.cs" />
     <Compile Include="Model\MemberType.cs" />
     <Compile Include="Model\Synckey.cs" />
+    <Compile Include="Model\SyncResult.cs" />
     <Compile Include="Model\User.cs" />
     <Compile Include="Model\Uuid.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
